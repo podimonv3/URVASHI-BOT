@@ -145,7 +145,7 @@ async def start(client, message):
             chat_id=message.from_user.id,
             text=script.JOIN_TXT,
             reply_markup=InlineKeyboardMarkup(btn),
-            parse_mode=enums.ParseMode.MARKDOWN
+            parse_mode=enums.ParseMode.HTML
         )
         if should_run_check_loop_sub:
 
@@ -177,7 +177,7 @@ async def start(client, message):
             chat_id=message.from_user.id,
             text=script.JOIN_TXT,
             reply_markup=InlineKeyboardMarkup(btn),
-            parse_mode=enums.ParseMode.MARKDOWN
+            parse_mode=enums.ParseMode.HTML
         )
         check = await check_loop_sub2(client, message)
         if check:
