@@ -214,24 +214,20 @@ async def get_bad_files(query, file_type=None, filter=False):
     return files_media1, files_media2, total_results
         
 async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
-    """For given query return (results, next_offset) with Cleaned Query & Natural Sorting"""
+    """Smart Exact Match & Natural Sorting (User Code Optimized)"""
 
-    # 1. യൂസർ ടൈപ്പ് ചെയ്ത ക്വറിയിൽ നിന്നും അപ്പോസ്ട്രോഫി പൂർണ്ണമായി ഒഴിവാക്കുന്നു
+    # 1. സെർച്ച് ക്വറി ഡാറ്റാബേസ് ഫോർമാറ്റിലേക്ക് ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
-    
-    # 2. മലയാളം, ഇംഗ്ലീഷ്, അക്കങ്ങൾ എന്നിവ മാത്രം നിലനിർത്തി മറ്റെല്ലാ ചിഹ്നങ്ങളും സ്പേസ് ആക്കുന്നു
     cleaned_query_chars = re.sub(r'[^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039]', ' ', query_no_apostrophe)
-    
-    # 3. അനാവശ്യമായ ഒന്നിലധികം സ്പേസുകൾ ഒഴിവാക്കി ക്ലീൻ ക്വറി എടുക്കുന്നു
     query = re.sub(r'\s+', ' ', cleaned_query_chars).strip()
 
-    # ക്വറി ശൂന്യമാണെങ്കിൽ എല്ലാ ഫയലുകളും കാണിക്കാൻ
     if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
+        return [], '', 0
+
+    # റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
+    if ' ' not in query:
         raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
     else:
-        # വാക്കുകൾക്കിടയിൽ സ്പേസ് ഉണ്ടെങ്കിൽ റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
         raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
 
     try:
@@ -240,28 +236,21 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
         return [], '', 0
 
     if USE_CAPTION_FILTER:
-        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        filter_dict = {'$or': [{'file_name': regex}, {'caption': regex}]}
     else:
-        filter = {'file_name': regex}
+        filter_dict = {'file_name': regex}
 
     if file_type:
-        filter['file_type'] = file_type
+        filter_dict['file_type'] = file_type
 
-    # Natural Sorting (Collation) സഹിതം ഫയലുകൾ തിരയുന്നു
-    cursor_media = Media.find(filter).sort('file_name', 1).collation({'locale': 'en', 'numericOrdering': True})
-    cursor_mediaa = Mediaa.find(filter).sort('file_name', 1).collation({'locale': 'en', 'numericOrdering': True})
+    # ഡാറ്റാബേസിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
+    cursor_media = Media.find(filter_dict)
+    cursor_mediaa = Mediaa.find(filter_dict)
 
-    # Ensure offset is non-negative
-    if offset < 0:
-        offset = 0
-
-    # Fetch files from both collections
     files_media = await cursor_media.to_list(length=60)
     files_mediaa = await cursor_mediaa.to_list(length=60)
 
-    total_results = len(files_media) + len(files_mediaa)
-    
-    # Concatenate files from both collections
+    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -272,17 +261,58 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # Manually skip files based on the offset
-    files = interleaved_files[offset:offset + max_results]
+    # --- നിങ്ങളുടെ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു ---
+    if interleaved_files:
+        query_lower = query.lower().strip()
+        
+        def sort_by_exact_match(file_obj):
+            file_name_lower = file_obj.file_name.lower().strip()
+            # അദൃശ്യ ചിഹ്നങ്ങൾ ഒഴിവാക്കുന്നു
+            file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
+            file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
+            
+            # നാച്ചുറൽ സോർട്ടിങ്ങിനായി നമ്പറുകൾ വേർതിരിക്കുന്നു
+            numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
+            num_key = tuple(numbers)
+            
+            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ്/വർഷം (Highest Priority)
+            match_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+|\d{4})'
+            if re.search(match_pattern, file_name_lower):
+                return (0, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 2: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
+            if file_name_lower.startswith(query_lower):
+                return (1, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
+            return (2, num_key, file_name_lower)
 
-    # Calculate next offset
+        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
+        interleaved_files.sort(key=sort_by_exact_match)
+
+    # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
+    seen_ids = set()
+    final_sorted_files = []
+    for file in interleaved_files:
+        if file.file_id not in seen_ids:
+            final_sorted_files.append(file)
+            seen_ids.add(file.file_id)
+
+    total_results = len(final_sorted_files)
+
+    # ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്യുന്നു
+    if offset < 0:
+        offset = 0
+
+    files = final_sorted_files[offset:offset + max_results]
     next_offset = offset + len(files)
 
-    # If there are more results, return the next_offset; otherwise, set it to ''
     if next_offset < total_results:
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
+
 
 
 async def get_file_details(query):
