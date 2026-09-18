@@ -8,6 +8,7 @@ from umongo import Instance, Document, fields
 from motor.motor_asyncio import AsyncIOMotorClient
 from marshmallow.exceptions import ValidationError
 from info import DATABASE_URI, DATABASE_URI2, DATABASE_URI3, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER
+import unicodedata
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -69,12 +70,38 @@ async def check_file(media):
         okda = "okda"
         return okda
         
-async def save_file(media):
-    """Save file in database"""
 
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
+def clean_file_name(raw_name):
+    """ഫയൽ നെയിം ക്ലീൻ ചെയ്യാനും ഇമോജികൾ/ചിഹ്നങ്ങൾ മാറ്റാനും ഉള്ള ഹെൽപ്പർ ഫങ്ഷൻ"""
+    if not raw_name:
+        return "NO_FILE"
+        
+    cleaned_name = str(raw_name)
+    
+    # 1. വീഡിയോ ഫയൽ എക്സ്റ്റൻഷൻ (mkv, mp4...) ഒഴിവാക്കുന്നു
+    if '.' in cleaned_name:
+        name_parts = cleaned_name.split('.')
+        if len(name_parts) > 1 and name_parts[-1].lower() in ['mkv', 'mp4', 'avi', 'mov', 'webm', 'ts']:
+            cleaned_name = '.'.join(name_parts[:-1])
+
+    # 2. ചിഹ്നങ്ങൾ ഒഴിവാക്കി പകരം സ്പേസ് നൽകുന്നു
+    cleaned_name = re.sub(r"['‘’]", "", cleaned_name)
+    cleaned_name = re.sub(r"[-–—_,#&?/( )\[\]\\\":\.¡%“”]", " ", cleaned_name)
+    
+    # 3. ഇംഗ്ലീഷ്, മലയാളം അക്ഷരങ്ങളും അക്കങ്ങളും മാത്രം നിലനിർത്തുന്നു (ഇമോജികൾ മാറും)
+    cleaned_symbols = re.sub(r'[^a-zA-Z0-9\u0D00-\u0D7F\s]', '', cleaned_name)
+    
+    # 4. അനാവശ്യ ഇരട്ട സ്പേസുകൾ ഒഴിവാക്കുന്നു
+    return re.sub(r'\s+', ' ', cleaned_symbols).strip()
+
+
+async def save_file(media):
+    """Save file in Media database"""
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    
+    # നിങ്ങളുടെ അഡ്വാൻസ്ഡ് ക്ലീനിംഗ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കും
+    file_name = clean_file_name(media.file_name)
+    
     try:
         file = Media(
             file_id=file_id,
@@ -95,18 +122,19 @@ async def save_file(media):
             logger.warning(
                 f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
             )
-
             return False, 0
         else:
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
             return True, 1
 
-async def save_filea(media):
-    """Save file in database"""
 
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
+async def save_filea(media):
+    """Save file in Mediaa database"""
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    
+    # നിങ്ങളുടെ അഡ്വാൻസ്ഡ് ക്ലീനിംഗ് ലോജിക് ഇവിടെയും പ്രവർത്തിക്കും
+    file_name = clean_file_name(media.file_name)
+    
     try:
         file = Mediaa(
             file_id=file_id,
@@ -127,11 +155,11 @@ async def save_filea(media):
             logger.warning(
                 f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
             )
-
             return False, 0
         else:
             logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
             return True, 1
+
             
 
 async def delete_files_below_threshold(db, threshold_size_mb: int = 50, batch_size: int = 20, chat_id: int = None, message_id: int = None):
@@ -197,67 +225,98 @@ async def get_bad_files(query, file_type=None, filter=False):
 
     return files_media1, files_media2, total_results
         
-async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
-    """For given query return (results, next_offset)"""
 
-    query = query.strip()
 
+async def get_search_results(query, file_type=None, max_results=10, offset=0, filter_param=False):
+    """For given query return (results, next_offset, total_results) 
+    with Super Smart Exact Match & Natural Sorting"""
+    
+    query = query.strip()    
+    query = ''.join(c for c in unicodedata.normalize('NFD', query) if unicodedata.category(c) != 'Mn')
+    query = re.sub(r"['‘’]", "", query)
+    query = re.sub(r"[-–—_,#&?/( )\[\]\\\":\.¡%“”]", " ", query)  
+    query = re.sub(r'[^a-zA-Z0-9\s]', '', query)
+    query = re.sub(r'\s+', ' ', query).strip()    
+    
     if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
-    else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
+        return [], '', 0
+
+    # 1. Exact Match Pattern (കൃത്യമായ വാക്ക് ഉള്ളവ)
+    exact_pattern = r'\b' + re.escape(query) + r'\b'
+    # 2. Smart Fuzzy/Partial Match Pattern (വാക്കുകൾക്കിടയിൽ മറ്റ് ചിഹ്നങ്ങൾ ഉള്ളവ)
+    fuzzy_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
 
     try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        regex_exact = re.compile(exact_pattern, flags=re.IGNORECASE)
+        regex_fuzzy = re.compile(fuzzy_pattern, flags=re.IGNORECASE)
     except:
         return [], '', 0
 
+    # Base Filter നിർമ്മിക്കുന്നു
+    def make_filter(regex_obj):
+        if USE_CAPTION_FILTER:
+            f = {'$or': [{'file_name': regex_obj}, {'caption': regex_obj}]}
+        else:
+            f = {'file_name': regex_obj}
+        if file_type:
+            f['file_type'] = file_type
+        return f
+
+    # രണ്ട് തരം ഫിൽട്ടറുകൾ തയാറാക്കുന്നു
+    exact_filter = make_filter(regex_exact)
+    fuzzy_filter = make_filter(regex_fuzzy)
+
+    # എക്സാക്റ്റ് മാച്ചിൽ വരാത്തവ മാത്രം ഫസി ഫിൽട്ടറിൽ വരാൻ (ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കാൻ)
     if USE_CAPTION_FILTER:
-        filter = {'$or': [{'file_name': regex}, {'caption': regex}]}
+        fuzzy_filter['$and'] = [
+            {'file_name': {'$not': regex_exact}},
+            {'caption': {'$not': regex_exact}}
+        ]
     else:
-        filter = {'file_name': regex}
+        fuzzy_filter['file_name'] = {'$regex': fuzzy_pattern, '$options': 'i', '$not': regex_exact}
 
-    if file_type:
-        filter['file_type'] = file_type
+    # ഫലങ്ങൾ ശേഖരിക്കാനുള്ള ഫങ്ഷൻ (Natural Sorting -$natural: -1 നിലനിർത്തിക്കൊണ്ട്)
+    async def fetch_combined(current_filter):
+        cursor_media = Media.find(current_filter).sort('$natural', -1)
+        cursor_mediaa = Mediaa.find(current_filter).sort('$natural', -1)
+        
+        # വലിയ കളക്ഷനുകളിൽ മെമ്മറി പ്രശ്നം ഒഴിവാക്കാൻ ആവശ്യത്തിന് മാത്രം (ലിമിറ്റ് 200) എടുക്കുന്നു
+        list_m = await cursor_media.to_list(length=200)
+        list_ma = await cursor_mediaa.to_list(length=200)
+        
+        # Interleave (ഒന്നിടവിട്ട് ചേർക്കുക) വഴി Natural Sorting മിക്സ് ചെയ്യുന്നു
+        interleaved = []
+        i = j = 0
+        while i < len(list_m) or j < len(list_ma):
+            if i < len(list_m):
+                interleaved.append(list_m[i])
+                i += 1
+            if j < len(list_ma):
+                interleaved.append(list_ma[j])
+                j += 1
+        return interleaved
 
+    # Exact Match ഉള്ളവ ആദ്യം എടുക്കുന്നു, അതിനു ശേഷം Fuzzy Match ഉള്ളവയും
+    exact_results = await fetch_combined(exact_filter)
+    fuzzy_results = await fetch_combined(fuzzy_filter)
 
-    # Query both collections
-    cursor_media = Media.find(filter).sort('$natural', -1)
-    cursor_mediaa = Mediaa.find(filter).sort('$natural', -1)
+    # സൂപ്പർ സ്മാർട്ട് ഓർഡറിൽ ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
+    all_files = exact_results + fuzzy_results
+    total_results = len(all_files)
 
-    # Ensure offset is non-negative
+    # Offset ക്രമീകരണം
     if offset < 0:
         offset = 0
 
-    # Fetch files from both collections
-    files_media = await cursor_media.to_list(length=60)
-    files_mediaa = await cursor_mediaa.to_list(length=60)
-
-    total_results = len(files_media) + len(files_mediaa)
-    # Concatenate files from both collections
-    interleaved_files = []
-    index_media1 = index_media2 = 0
-    while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
-        if index_media1 < len(files_media):
-            interleaved_files.append(files_media[index_media1])
-            index_media1 += 1
-        if index_media2 < len(files_mediaa):
-            interleaved_files.append(files_mediaa[index_media2])
-            index_media2 += 1
-
-    # Manually skip files based on the offset
-    files = interleaved_files[offset:offset + max_results]
-
-    # Calculate next offset
+    # ഫലങ്ങൾ മുറിച്ചെടുക്കുന്നു (Pagination)
+    files = all_files[offset:offset + max_results]
     next_offset = offset + len(files)
 
-    # If there are more results, return the next_offset; otherwise, set it to ''
     if next_offset < total_results:
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 async def get_file_details(query):
     filter = {'file_id': query}
