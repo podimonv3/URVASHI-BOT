@@ -255,7 +255,7 @@ async def next_page(bot, query):
         btn = [
             [
                 InlineKeyboardButton(
-                    text=f"[{get_size(file.file_size)}] {file.file_name}", callback_data=f'files#{file.file_id}'
+                    text=f"[{get_size(file.file_size)}]{file.file_name}", callback_data=f'files#{file.file_id}'
                 ),
             ]
             for file in files
@@ -516,11 +516,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f_caption = f_caption
         if f_caption is None:
             f_caption = f"{title}"
-        buttons = [[
-            InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/MCUupdatesLINKS')
-            ],[
-            InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url='https://t.me/+uA5gEKm8WXk1ZTll')
-         ]]
+            
+        # ബട്ടണുകൾ ഉണ്ടായിരുന്ന ഭാഗം ഒഴിവാക്കി നേരിട്ട് PM-ലേക്ക് റീഡയറക്ട് ചെയ്യുന്നു
         try:
             if settings['botpm']:
                 await query.answer(url=f"https://t.me/{temp.U_NAME}?start={ident}_{file_id}")
@@ -536,6 +533,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             await query.answer(url=f"https://t.me/{temp.U_NAME}?start={ident}_{file_id}")
         except Exception as e:
             await query.answer(url=f"https://t.me/{temp.U_NAME}?start={ident}_{file_id}")
+            
     elif query.data.startswith("checksub"):
         if REQ_CHANNEL1 and not await is_requested_one(client, query):
             await query.answer("CLICK  «➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺» AND THEN CLICK 🔄 Try Again 🔄 BUTTON TO GET MOVIE FILE 🗃️", show_alert=True)
@@ -559,36 +557,25 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 f_caption = f_caption
         if f_caption is None:
             f_caption = f"{title}"
-        buttons = [[
-            InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/MCUupdatesLINKS')
-            ],[
-            InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url='https://t.me/+uA5gEKm8WXk1ZTll')
-         ]]
+
         await query.answer()
+        
+        # ഇവിടെ നിന്നും reply_markup (ബട്ടണുകൾ) ഒഴിവാക്കി
         xd = await client.send_cached_media(
             chat_id=query.from_user.id,
             file_id=file_id,
             caption=f_caption,
-            protect_content=True if ident == "checksubp" else False,
-            reply_markup=InlineKeyboardMarkup(
-               [[
-                InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/MCUupdatesLINKS')
-            ],[
-               InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url='https://t.me/+uA5gEKm8WXk1ZTll')
-               ]]
-            )  
+            protect_content=True if ident == "checksubp" else False
         )
+        
         if title and any(keyword in title.lower() for keyword in ['predvd', 'predvdrip']):
             f_caption += "\n⚠️<b><i>ഈ മൂവിയുടെ ഫയൽ എവിടെയെങ്കിലും ഫോർവേഡ് ചെയ്തു വെക്കുക എന്നിട്ട് ഡൗൺലോഡ് ചെയ്യുക\n\n3 മിനിറ്റിൽ ഇവിടുന്ന് ഡിലീറ്റ് ആവും🗑\n\n⚠️Forward the file of this Movie somewhere and download it\n\nWill be deleted from here in 3 minutes🗑</i></b>"
-            inline_keyboard = [[
-            InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/MCUupdatesLINKS')
-            ],[
-            InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url='https://t.me/+uA5gEKm8WXk1ZTll')
-            ]]
-            reply_markup = InlineKeyboardMarkup(inline_keyboard)
-            await xd.edit_caption(caption=f_caption, reply_markup=reply_markup)
+            
+            # എഡിറ്റ് ചെയ്യുമ്പോഴും ബട്ടണുകൾ വരാതിരിക്കാൻ reply_markup ഒഴിവാക്കി
+            await xd.edit_caption(caption=f_caption)
             await asyncio.sleep(180)                   
             await xd.delete()
+
 
     elif query.data.startswith("killfilesdq"):
         ident, keyword = query.data.split("#")
@@ -634,11 +621,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
     
     elif query.data == "start":
         buttons = [
-               InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url=f'https://t.me/+uA5gEKm8WXk1ZTll')
-               ],[
-                InlineKeyboardButton('⚓️ Oᴛᴛ Iɴsᴛᴀɢʀᴀᴍ Cʜᴀɴɴᴇʟ ⚓️', url=f'https://www.instagram.com/new_ott__updates?igsh=enI5ZzIzcXkzd3Bl')
-              ],[
-                InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url="https://t.me/MCUupdatesLINKS"),
+            [
+                InlineKeyboardButton('👥 Jᴏɪɴ Oᴜʀ Gʀᴏᴜᴘ 👥', url='https://t.me/+eb__Eg3RS2IyZWQ1')
+            ],
+            [
+                InlineKeyboardButton('📊 Sᴛᴀᴛs 📊', callback_data='stats'),
+                InlineKeyboardButton('✖️ Cʟᴏsᴇ ✖️', callback_data='close_data')
+            ]
         ]       
         reply_markup = InlineKeyboardMarkup(buttons)
         await query.message.edit_text(
@@ -646,64 +635,51 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
+
     
     elif query.data == "stats":
         buttons = [[
-            InlineKeyboardButton('ʙᴀᴄᴋ', callback_data='about'),
-            InlineKeyboardButton('♻️', callback_data='rfrsh')
+            InlineKeyboardButton('ʙᴀᴄᴋ', callback_data='start')           
         ]]
         reply_markup = InlineKeyboardMarkup(buttons)        
+        
         tot = await Media.count_documents()
         tota = await Mediaa.count_documents()
         total = tot + tota
         users = await db.total_users_count()
         chats = await db.total_chat_count()
+        
         stats = await clientDB.command('dbStats')
         used_dbSize = (stats['dataSize']/(1024*1024))+(stats['indexSize']/(1024*1024))        
         free_dbSize = 512-used_dbSize
+        
         stats2 = await clientDB2.command('dbStats')
         used_dbSize2 = (stats2['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
         free_dbSize2 = 512-used_dbSize2
+        
         stats3 = await clientDB3.command('dbStats')
-        used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
+        used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats3['indexSize']/(1024*1024))
         free_dbSize3 = 512-used_dbSize3        
-        await query.message.edit_text(
-            text=script.STATUS_TXT2.format(total, tot, round(used_dbSize2, 2), round(free_dbSize2, 2), tota, round(used_dbSize3, 2), round(free_dbSize3, 2), users, chats, round(used_dbSize, 2), round(free_dbSize, 2)),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
-        if query.from_user.id in ADMINS:
-            await query.message.edit_text(text=script.STATUS_TXT.format(total, users, chats, monsize, free), reply_markup=reply_markup, parse_mode=enums.ParseMode.HTML)
-        else:
-            await query.answer("⚠ ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ ⚠\n\nIᴛꜱ ᴏɴʟʏ ғᴏʀ ᴍʏ ADMINS\n\n©MCU MOVIES", show_alert=True)
-            await query.message.edit_text(text="നോക്കി നിന്നോ ഇപ്പോൾ കിട്ടും 😏", reply_markup=reply_markup)
-    elif query.data == "rfrsh":
-        await query.answer("Fetching MongoDb DataBase")
-        buttons = [[
-            InlineKeyboardButton('ʙᴀᴄᴋ', callback_data='about'),
-            InlineKeyboardButton('♻️', callback_data='rfrsh')
-        ]]
-        reply_markup = InlineKeyboardMarkup(buttons)
-        tot = await Media.count_documents()
-        tota = await Mediaa.count_documents()
-        total = tot + tota
-        users = await db.total_users_count()
-        chats = await db.total_chat_count()
-        stats = await clientDB.command('dbStats')
-        used_dbSize = (stats['dataSize']/(1024*1024))+(stats['indexSize']/(1024*1024))        
-        free_dbSize = 512-used_dbSize
-        stats2 = await clientDB2.command('dbStats')
-        used_dbSize2 = (stats2['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
-        free_dbSize2 = 512-used_dbSize2
-        stats3 = await clientDB3.command('dbStats')
-        used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
-        free_dbSize3 = 512-used_dbSize3        
-        await query.message.edit_text(
-            text=script.STATUS_TXT2.format(total, tot, round(used_dbSize2, 2), round(free_dbSize2, 2), tota, round(used_dbSize3, 2), round(free_dbSize3, 2), users, chats, round(used_dbSize, 2), round(free_dbSize, 2)),
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
+        
+        # നിങ്ങൾ ആവശ്യപ്പെട്ട അതേ കൃത്യമായ ഫോർമാറ്റ് താഴെ നൽകുന്നു
+        stats_text = (
+            "📊 <b>Bot Statistics</b>\n\n"
+            f"▪️ Total Files: {total}\n"
+            f"▪️ Main DB Files (Media): {tot}\n"
+            f"▪️ DB 2 Files (Mediaa): {tota}\n\n"
+            f"▪️ Total Users: {users}\n"
+            f"▪️ Total Chats: {chats}\n\n"
+            f"🗄 Database 1 Size: {round(used_dbSize2, 2)} MB / Free: {round(free_dbSize2, 2)} MB\n"
+            f"🗄 Database 2 Size: {round(used_dbSize3, 2)} MB / Free: {round(free_dbSize3, 2)} MB\n"
+            f"🗄 Database 3 Size: {round(used_dbSize, 2)} MB / Free: {round(free_dbSize, 2)} MB"
         )
         
+        await query.message.edit_text(
+            text=stats_text,
+            reply_markup=reply_markup,
+            parse_mode=enums.ParseMode.HTML
+        )
+
     
 async def auto_filter(client, msg, spoll=False):
     if not spoll:
