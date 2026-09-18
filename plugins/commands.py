@@ -74,58 +74,48 @@ async def send_file(client, query, ident, file_id):
             logger.exception(e)
             f_caption = f_caption
     if f_caption is None:
-        f_cation = f"{title}"
-    inline_keyboard = [[
-            InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url=f'https://t.me/MCUupdatesLINKS')
-            ],[     
-            InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/+uA5gEKm8WXk1ZTll')
-    ]]
-    reply_markup = InlineKeyboardMarkup(inline_keyboard)
+        f_caption = f"{title}" # മുൻപ് ഉണ്ടായിരുന്ന ഫയൽ നെയിം സ്പെല്ലിംഗ് പിശക് (f_cation) ഇവിടെ തിരുത്തിയിട്ടുണ്ട്
+
+    # ബട്ടണുകൾ ഇല്ലാതെ ഫയൽ അയക്കുന്നു
     ok = await client.send_cached_media(
         chat_id=query.from_user.id,
         file_id=file_id,
         caption=f_caption,
-        protect_content=True if ident == 'checksubp' else False,
-        reply_markup=reply_markup
-    )    
+        protect_content=True if ident == 'checksubp' else False
+    )
+    
    
 @Client.on_message(filters.command("start") & filters.incoming)
 async def start(client, message):   
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
-        buttons = [
-                InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url=f'https://t.me/+uA5gEKm8WXk1ZTll')
-               ],[
-                InlineKeyboardButton('⚓️ Oᴛᴛ Iɴsᴛᴀɢʀᴀᴍ Cʜᴀɴɴᴇʟ ⚓️', url=f'https://www.instagram.com/new_ott__updates?igsh=enI5ZzIzcXkzd3Bl')
-              ],[
-                InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url="https://t.me/MCUupdatesLINKS"),
-        ]       
-        reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply(script.START_TXT.format(message.from_user.mention if message.from_user else message.chat.title, temp.U_NAME, temp.B_NAME), reply_markup=reply_markup)
-        await asyncio.sleep(2) # 😢 https://github.com/EvamariaTG/EvaMaria/blob/master/plugins/p_ttishow.py#L17 😬 wait a bit, before checking.
+        # ഗ്രൂപ്പിൽ റീപ്ലേ നൽകുന്നതും ലോഗ് ചാനലിലേക്ക് അയക്കുന്നതും ഒഴിവാക്കി
+        await asyncio.sleep(2) 
         if not await db.get_chat(message.chat.id):
-            total=await client.get_chat_members_count(message.chat.id)
-            await client.send_message(LOG_CHANNEL, script.LOG_TEXT_G.format(message.chat.title, message.chat.id, total, "Unknown"))       
             await db.add_chat(message.chat.id, message.chat.title)
         return 
+        
+    # ബോട്ടിന്റെ PM (Private)-ൽ മാത്രം താഴെയുള്ള ഭാഗം പ്രവർത്തിക്കും
     if not await db.is_user_exist(message.from_user.id):
         await db.add_user(message.from_user.id, message.from_user.first_name)
-        await client.send_message(LOG_CHANNEL, script.LOG_TEXT_P.format(message.from_user.id, message.from_user.mention))
+        # ഇവിടെയുണ്ടായിരുന്ന ലോഗ് ചാനൽ മെസ്സേജ് ഒഴിവാക്കി
+        
     if len(message.command) != 2:
         buttons = [
-                InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url=f'https://t.me/+uA5gEKm8WXk1ZTll')
-               ],[
-                InlineKeyboardButton('⚓️ Oᴛᴛ Iɴsᴛᴀɢʀᴀᴍ Cʜᴀɴɴᴇʟ ⚓️', url=f'https://www.instagram.com/new_ott__updates?igsh=enI5ZzIzcXkzd3Bl')
-              ],[
-                InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url="https://t.me/MCUupdatesLINKS"),
+            [
+                InlineKeyboardButton('👥 Jᴏɪɴ Oᴜʀ Gʀᴏᴜᴘ 👥', url='https://t.me/+eb__Eg3RS2IyZWQ1')
+            ],
+            [
+                InlineKeyboardButton('📊 Sᴛᴀᴛs 📊', callback_data='stats'),
+                InlineKeyboardButton('✖️ Cʟᴏsᴇ ✖️', callback_data='close_data')
+            ]
         ]       
         reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply_video(
-            video="https://envs.sh/_O0.mp4",
-            caption=script.START_TXT.format(message.from_user.mention, temp.U_NAME, temp.B_NAME),
+        await message.reply_text(            
+            text=script.START_TXT.format(message.from_user.mention, temp.U_NAME, temp.B_NAME),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
-        return
+        return       
     if REQ_CHANNEL1 and not await is_requested_one(client, message):
         btn = [[
             InlineKeyboardButton(
@@ -135,29 +125,30 @@ async def start(client, message):
         should_run_check_loop_sub = False
         try:
             if REQ_CHANNEL2 and not await is_requested_two(client, message):
-                btn.append(
-                      [
+                btn.append([
                     InlineKeyboardButton(
                         "➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺", url=client.req_link2)
-                      ]
-                )
+                ])
                 should_run_check_loop_sub = True                      
         except Exception as e:
             print(e)
-        if message.command[1] != "subscribe":
+        if message.command[1] != "subscribe": # മുൻപ് വിട്ടുപോയ ഇൻഡക്സ് [1] ഇവിടെ ചേർത്തിട്ടുണ്ട്
             try:
                 kk, file_id = message.command[1].split("_", 1)
                 pre = 'checksubp' if kk == 'filep' else 'checksub' 
                 btn.append([InlineKeyboardButton("🔄 Try Again 🔄", callback_data=f"{pre}#{file_id}")])
             except (IndexError, ValueError):
                 btn.append([InlineKeyboardButton("🔄 Try Again 🔄", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
+        
+        # ഇവിടെ നിങ്ങളുടെ script.JOIN_TXT എന്നതിലേക്ക് കോഡ് മാറ്റിയിരിക്കുന്നു
         sh = await client.send_message(
             chat_id=message.from_user.id,
-            text="**♦️ 𝗥𝗘𝗔𝗗 𝗧𝗛𝗜𝗦 𝗜𝗡𝗦𝗧𝗥𝗨𝗖𝗧𝗜𝗢𝗡 ♦️\n\nനിങ്ങൾ ചോദിക്കുന്ന സിനിമകൾ ലഭിക്കണം എന്നുണ്ടെങ്കിൽ നിങ്ങൾ ഞങ്ങളുടെ ചാനലിൽ ജോയിൻ ചെയ്തിരിക്കണം. ജോയിൻ ചെയ്യാൻ ✺ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺ എന്ന ബട്ടണിൽ ക്ലിക്ക് ചെയ്യാവുന്നതാണ്.\n\nജോയിൻ ചെയ്ത ശേഷം 🔄 Try Again 🔄 എന്ന ബട്ടണിൽ അമർത്തിയാൽ നിങ്ങൾക്ക് ഞാൻ ആ സിനിമ അയച്ചു തരുന്നതാണ്..\n\nCLICK ✺ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺ AND THEN CLICK 🔄 Try Again 🔄 BUTTON TO GET MOVIE FILE 🗃️**",
+            text=script.JOIN_TXT,
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode=enums.ParseMode.MARKDOWN
-            )
+        )
         if should_run_check_loop_sub:
+
             check = await check_loop_sub(client, message)
         elif should_run_check_loop_sub1:
             check = await check_loop_sub1(client, message)
@@ -180,9 +171,11 @@ async def start(client, message):
                 btn.append([InlineKeyboardButton("Try Again", callback_data=f"{pre}#{file_id}")])
             except (IndexError, ValueError):
                 btn.append([InlineKeyboardButton("Try Again", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
+        
+        # ഇവിടെയും script.JOIN_TXT എന്നതിലേക്ക് കോഡ് മാറ്റിയിരിക്കുന്നു
         sh = await client.send_message(
             chat_id=message.from_user.id,
-            text="**♦️ 𝗥𝗘𝗔𝗗 𝗧𝗛𝗜𝗦 𝗜𝗡𝗦𝗧𝗥𝗨𝗖𝗧𝗜𝗢𝗡 ♦️\n\nനിങ്ങൾ ചോദിക്കുന്ന സിനിമകൾ ലഭിക്കണം എന്നുണ്ടെങ്കിൽ നിങ്ങൾ ഞങ്ങളുടെ ചാനലിൽ ജോയിൻ ചെയ്തിരിക്കണം. ജോയിൻ ചെയ്യാൻ ✺ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺ എന്ന ബട്ടണിൽ ക്ലിക്ക് ചെയ്യാവുന്നതാണ്.\n\nജോയിൻ ചെയ്ത ശേഷം 🔄 Try Again 🔄 എന്ന ബട്ടണിൽ അമർത്തിയാൽ നിങ്ങൾക്ക് ഞാൻ ആ സിനിമ അയച്ചു തരുന്നതാണ്..\n\nജോയിൻ ചെയ്ത ശേഷം 🔄 Try Again 🔄 എന്ന ബട്ടണിൽ അമർത്തിയാൽ നിങ്ങൾക്ക് ഞാൻ ആ സിനിമ അയച്ചു തരുന്നതാണ്..\n\nCLICK ✺ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺ AND THEN CLICK 🔄 Try Again 🔄 BUTTON TO GET MOVIE FILE 🗃️**",
+            text=script.JOIN_TXT,
             reply_markup=InlineKeyboardMarkup(btn),
             parse_mode=enums.ParseMode.MARKDOWN
         )
@@ -202,16 +195,17 @@ async def start(client, message):
          
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
         buttons = [
-               InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url=f'https://t.me/+uA5gEKm8WXk1ZTll')
-               ],[
-                InlineKeyboardButton('⚓️ Oᴛᴛ Iɴsᴛᴀɢʀᴀᴍ Cʜᴀɴɴᴇʟ ⚓️', url=f'https://www.instagram.com/new_ott__updates?igsh=enI5ZzIzcXkzd3Bl')
-              ],[
-                InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url="https://t.me/MCUupdatesLINKS"),
+            [
+                InlineKeyboardButton('👥 Jᴏɪɴ Oᴜʀ Gʀᴏᴜᴘ 👥', url='https://t.me/+eb__Eg3RS2IyZWQ1')
+            ],
+            [
+                InlineKeyboardButton('📊 Sᴛᴀᴛs 📊', callback_data='stats'),
+                InlineKeyboardButton('✖️ Cʟᴏsᴇ ✖️', callback_data='close_data')
+            ]
         ]       
         reply_markup = InlineKeyboardMarkup(buttons)
-        await message.reply_video(
-            video="https://envs.sh/_O0.mp4",
-            caption=script.START_TXT.format(message.from_user.mention, temp.U_NAME, temp.B_NAME),
+        await message.reply_text(            
+            text=script.START_TXT.format(message.from_user.mention, temp.U_NAME, temp.B_NAME),
             reply_markup=reply_markup,
             parse_mode=enums.ParseMode.HTML
         )
@@ -354,16 +348,14 @@ async def start(client, message):
     if f_caption is None:
         f_caption = f"{title}"
 
+    # ബട്ടണുകൾ പൂർണ്ണമായി ഒഴിവാക്കി ഫയൽ അയക്കുന്നു
     xd = await client.send_cached_media(
         chat_id=message.from_user.id,
         file_id=file_id,
         caption=f_caption,
-        protect_content=True if pre == 'filep' else False,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⚙ Lᴀᴛᴇꜱᴛ Mᴏᴠɪᴇ Rᴇʟᴇᴀꜱᴇꜱ ⚙', url='https://t.me/MCUupdatesLINKS')
-            ],[
-            InlineKeyboardButton('🖥 Oᴛᴛ Uᴩᴅᴀᴛᴇꜱ Cʜᴀɴɴᴇʟ 🖥', url='https://t.me/+uA5gEKm8WXk1ZTll')
-            ]])
+        protect_content=True if pre == 'filep' else False
     )
+
     
     
 @Client.on_message(filters.command('channel') & filters.user(ADMINS))
@@ -477,11 +469,6 @@ async def delete_all_index_confirm(bot, message):
     await Mediaa.collection.drop()
     await message.answer('Piracy Is Crime')
     await message.message.edit('Succesfully Deleted All The Indexed Files.')
-
-
-
-
-
 
 
 
