@@ -107,7 +107,7 @@ async def pm_text(bot: Client, message):
             
             if settings["button"]:
                 btn = [
-                    [InlineKeyboardButton(text=f"[{get_size(file.file_size)}] ⊳ {file.file_name}", callback_data=f'{pre}#{file.file_id}')]
+                    [InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')]
                     for file in files
                 ]
             else:
@@ -255,7 +255,7 @@ async def next_page(bot, query):
         btn = [
             [
                 InlineKeyboardButton(
-                    text=f"[{get_size(file.file_size)}]{file.file_name}", callback_data=f'files#{file.file_id}'
+                    text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'files#{file.file_id}'
                 ),
             ]
             for file in files
@@ -536,10 +536,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
     elif query.data.startswith("checksub"):
         if REQ_CHANNEL1 and not await is_requested_one(client, query):
-            await query.answer("CLICK  «➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺» AND THEN CLICK 🔄 Try Again 🔄 BUTTON TO GET MOVIE FILE 🗃️", show_alert=True)
+            await query.answer("CLICK  «➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺»", show_alert=True)
             return
         if REQ_CHANNEL2 and not await is_requested_two(client, query):
-            await query.answer("Update Channel 2 ഒന്നൂടെ ജോയിൻ ആവുക എന്നിട്ട് 🔄 Try Again 🔄 ക്ലിക്ക് ചെയ്യുക സിനിമ കിട്ടുന്നതാണ്🫶🏼\n\n𝗌𝗈𝗅𝗏𝖾 𝗂𝗌𝗌𝗎𝖾?-𝖨𝖿 𝖳𝗁𝖾𝗋𝖾 𝖠𝗋𝖾 2 𝖢𝗁𝖺𝗇𝗇𝖾𝗅𝗌 𝖳𝗈 𝖩𝗈𝗂𝗇, 𝖩𝗈𝗂𝗇 𝖥𝗂𝗋𝗌𝗍 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝖳𝗁𝖾𝗇 𝖩𝗈𝗂𝗇 𝖳𝗁𝖾 𝖲𝖾𝖼𝗈𝗇𝖽 𝖢𝗁𝖺𝗇𝗇𝖾𝗅 𝗔𝗳𝘁𝗲𝗿 5𝘀𝗲𝗰", show_alert=True)
+            await query.answer("Update Channel ജോയിൻ ആവുക", show_alert=True)
             return
         ident, file_id = query.data.split("#")
         files_ = await get_file_details(file_id)
@@ -661,7 +661,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
         used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats3['indexSize']/(1024*1024))
         free_dbSize3 = 512-used_dbSize3        
         
-        # നിങ്ങൾ ആവശ്യപ്പെട്ട അതേ കൃത്യമായ ഫോർമാറ്റ് താഴെ നൽകുന്നു
         stats_text = (
             "📊 <b>Bot Statistics</b>\n\n"
             f"▪️ Total Files: {total}\n"
@@ -674,11 +673,21 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"🗄 Database 3 Size: {round(used_dbSize, 2)} MB / Free: {round(free_dbSize, 2)} MB"
         )
         
-        await query.message.edit_text(
-            text=stats_text,
-            reply_markup=reply_markup,
-            parse_mode=enums.ParseMode.HTML
-        )
+        # 🛠️ എറർ ഒഴിവാക്കാനായി വരുത്തിയ മാറ്റം:
+        try:
+            # മീഡിയ മെസ്സേജ് ആണെങ്കിൽ അതിന്റെ ക്യാപ്ഷൻ എഡിറ്റ് ചെയ്യുന്നു
+            await query.message.edit_caption(
+                caption=stats_text,
+                reply_markup=reply_markup,
+                parse_mode=enums.ParseMode.HTML
+            )
+        except Exception:
+            # അതല്ലെങ്കിൽ സാധാരണ പോലെ ടെക്സ്റ്റ് എഡിറ്റ് ചെയ്യുന്നു
+            await query.message.edit_text(
+                text=stats_text,
+                reply_markup=reply_markup,
+                parse_mode=enums.ParseMode.HTML
+            )
 
     
 async def auto_filter(client, msg, spoll=False):
@@ -693,15 +702,23 @@ async def auto_filter(client, msg, spoll=False):
             files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
             if not files:
                 reqst_gle = search.replace(" ", "+")              
-                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://google.com{reqst_gle}")
-                google_row = [btn_google]
+                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://google.com/{reqst_gle}")
+                
+                # പുതിയ രണ്ട് ബട്ടണുകൾ ഇവിടെ ചേർത്തിരിക്കുന്നു
+                btn_rules = InlineKeyboardButton("📜 Rᴜʟᴇs", url="http://telegra.ph/Request-%E0%B4%85%E0%B4%AF%E0%B4%95%E0%B4%95-%E0%B4%AE%E0%B4%A8%E0%B4%A8-%E0%B4%B5%E0%B4%AF%E0%B4%95%E0%B4%95%E0%B4%A3%E0%B4%9F%E0%B4%A8%E0%B4%A8%E0%B4%A4-08-19")
+                btn_request = InlineKeyboardButton("📥 Rᴇqᴜᴇsᴛ", url="https://t.me/+VqyHBSateMcwNjU9")
 
-                keyboard = InlineKeyboardMarkup(inline_keyboard=[google_row])
+                # എല്ലാ ബട്ടണുകളും ഇൻലൈൻ കീബോർഡിലേക്ക് ക്രമീകരിക്കുന്നു
+                # ഗൂഗിൾ ബട്ടൺ മുകളിലും, റൂൾസ് & റിക്വസ്റ്റ് ബട്ടണുകൾ തൊട്ടുതാഴെ ഒരുമിച്ചും വരും
+                keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                    [btn_google],
+                    [btn_rules, btn_request]
+                ])
                 try:
                     # ആദ്യം ഫോട്ടോയും ക്യാപ്ഷനും ആയി അയക്കാൻ നോക്കുന്നു
                     # SPELL_IMG എന്നതിൽ നിങ്ങളുടെ ഫോട്ടോ ലിങ്ക് / ഫയൽ ഐഡി നൽകുക
-                    k = await msg.reply_photo(
-                        photo="https://files.catbox.moe/oryxah.jpg",
+                    k = await msg.reply_video(
+                        video="https://files.catbox.moe/rb7k4l",
                         caption=script.SPELL_TEXT.format(msg.from_user.mention),
                         reply_markup=keyboard,
                         parse_mode=enums.ParseMode.HTML
@@ -729,7 +746,7 @@ async def auto_filter(client, msg, spoll=False):
         btn = [
             [
                 InlineKeyboardButton(
-                    text=f"[{get_size(file.file_size)}]{file.file_name}", callback_data=f'{pre}#{file.file_id}'
+                    text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}'
                 ),
             ]
             for file in files
