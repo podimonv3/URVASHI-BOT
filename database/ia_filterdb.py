@@ -214,15 +214,24 @@ async def get_bad_files(query, file_type=None, filter=False):
     return files_media1, files_media2, total_results
         
 async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
-    """For given query return (results, next_offset)"""
+    """For given query return (results, next_offset) with Cleaned Query & Natural Sorting"""
 
-    query = query.strip()
+    # 1. യൂസർ ടൈപ്പ് ചെയ്ത ക്വറിയിൽ നിന്നും അപ്പോസ്ട്രോഫി പൂർണ്ണമായി ഒഴിവാക്കുന്നു
+    query_no_apostrophe = query.replace("'", "")
+    
+    # 2. മലയാളം, ഇംഗ്ലീഷ്, അക്കങ്ങൾ എന്നിവ മാത്രം നിലനിർത്തി മറ്റെല്ലാ ചിഹ്നങ്ങളും സ്പേസ് ആക്കുന്നു
+    cleaned_query_chars = re.sub(r'[^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039]', ' ', query_no_apostrophe)
+    
+    # 3. അനാവശ്യമായ ഒന്നിലധികം സ്പേസുകൾ ഒഴിവാക്കി ക്ലീൻ ക്വറി എടുക്കുന്നു
+    query = re.sub(r'\s+', ' ', cleaned_query_chars).strip()
 
+    # ക്വറി ശൂന്യമാണെങ്കിൽ എല്ലാ ഫയലുകളും കാണിക്കാൻ
     if not query:
         raw_pattern = '.'
     elif ' ' not in query:
         raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
     else:
+        # വാക്കുകൾക്കിടയിൽ സ്പേസ് ഉണ്ടെങ്കിൽ റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
         raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
 
     try:
@@ -238,10 +247,9 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
     if file_type:
         filter['file_type'] = file_type
 
-
-    # Query both collections
-    cursor_media = Media.find(filter).sort('$natural', -1)
-    cursor_mediaa = Mediaa.find(filter).sort('$natural', -1)
+    # Natural Sorting (Collation) സഹിതം ഫയലുകൾ തിരയുന്നു
+    cursor_media = Media.find(filter).sort('file_name', 1).collation({'locale': 'en', 'numericOrdering': True})
+    cursor_mediaa = Mediaa.find(filter).sort('file_name', 1).collation({'locale': 'en', 'numericOrdering': True})
 
     # Ensure offset is non-negative
     if offset < 0:
@@ -252,6 +260,7 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
     files_mediaa = await cursor_mediaa.to_list(length=60)
 
     total_results = len(files_media) + len(files_mediaa)
+    
     # Concatenate files from both collections
     interleaved_files = []
     index_media1 = index_media2 = 0
@@ -274,6 +283,7 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 async def get_file_details(query):
     filter = {'file_id': query}
