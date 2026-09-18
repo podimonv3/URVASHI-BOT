@@ -119,7 +119,7 @@ async def start(client, message):
     if REQ_CHANNEL1 and not await is_requested_one(client, message):
         btn = [[
             InlineKeyboardButton(
-                "➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺", url=client.req_link1)
+                "✦ 𝑱𝑶𝑰𝑵 𝑼𝑷𝑫𝑨𝑻𝑬 𝑪𝑯𝑨𝑵𝑵𝑬𝑳 I✦", url=client.req_link1)
         ]]
         should_run_check_loop_sub1 = True
         should_run_check_loop_sub = False
@@ -127,7 +127,7 @@ async def start(client, message):
             if REQ_CHANNEL2 and not await is_requested_two(client, message):
                 btn.append([
                     InlineKeyboardButton(
-                        "➳ 𝐽𝑂𝐼𝑁 𝑈𝑃𝐷𝐴𝑇𝐸 𝐶𝐻𝑁𝑁𝑁𝐸𝐿 ✺", url=client.req_link2)
+                        "✦ 𝑱𝑶𝑰𝑵 𝑼𝑷𝑫𝑨𝑻𝑬 𝑪𝑯𝑨𝑵𝑵𝑬𝑳 II✦", url=client.req_link2)
                 ])
                 should_run_check_loop_sub = True                      
         except Exception as e:
@@ -136,9 +136,9 @@ async def start(client, message):
             try:
                 kk, file_id = message.command[1].split("_", 1)
                 pre = 'checksubp' if kk == 'filep' else 'checksub' 
-                btn.append([InlineKeyboardButton("🔄 Try Again 🔄", callback_data=f"{pre}#{file_id}")])
+                btn.append([InlineKeyboardButton("⟲ 𝘛𝘳𝘺 𝘈𝘨𝘢𝘪𝘯 ⟳", callback_data=f"{pre}#{file_id}")])
             except (IndexError, ValueError):
-                btn.append([InlineKeyboardButton("🔄 Try Again 🔄", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
+                btn.append([InlineKeyboardButton("⟲ 𝘛𝘳𝘺 𝘈𝘨𝘢𝘪𝘯 ⟳", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
         
         # ഇവിടെ നിങ്ങളുടെ script.JOIN_TXT എന്നതിലേക്ക് കോഡ് മാറ്റിയിരിക്കുന്നു
         sh = await client.send_message(
@@ -168,9 +168,9 @@ async def start(client, message):
             try:
                 kk, file_id = message.command[1].split("_", 1)
                 pre = 'checksubp' if kk == 'filep' else 'checksub' 
-                btn.append([InlineKeyboardButton("Try Again", callback_data=f"{pre}#{file_id}")])
+                btn.append([InlineKeyboardButton("⟲ 𝘛𝘳𝘺 𝘈𝘨𝘢𝘪𝘯 ⟳", callback_data=f"{pre}#{file_id}")])
             except (IndexError, ValueError):
-                btn.append([InlineKeyboardButton("Try Again", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
+                btn.append([InlineKeyboardButton("⟲ 𝘛𝘳𝘺 𝘈𝘨𝘢𝘪𝘯 ⟳", url=f"https://t.me/{temp.U_NAME}?start={message.command[1]}")])
         
         # ഇവിടെയും script.JOIN_TXT എന്നതിലേക്ക് കോഡ് മാറ്റിയിരിക്കുന്നു
         sh = await client.send_message(
