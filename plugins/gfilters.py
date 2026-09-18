@@ -143,4 +143,3 @@ async def dellacbd(client, query):
 async def cancel_delall(client, query):
     await query.answer("Action Cancelled!")
     await query.message.edit_text("Process Cancelled. ❌")
-
