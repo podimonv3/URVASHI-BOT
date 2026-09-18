@@ -697,7 +697,7 @@ async def auto_filter(client, msg, spoll=False):
         if message.text.startswith("/"): return  # ignore commands
         if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
-        if 2 < len(message.text) < 100:
+        if 0 < len(message.text) < 100:
             
             # --- 1. ഡാറ്റാബേസ് സെർച്ചിന് മുൻപ് തന്നെ വാക്ക് ക്ലീൻ ചെയ്യുന്നു ---
             search = message.text
@@ -747,7 +747,7 @@ async def auto_filter(client, msg, spoll=False):
                 
                 btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://www.google.com/search?q={reqst_gle}")
                 btn_rules = InlineKeyboardButton("📜 Rᴜʟᴇs", url="http://telegra.ph/Request-%E0%B4%85%E0%B4%AF%E0%B4%95%E0%B4%95-%E0%B4%AE%E0%B4%A8%E0%B4%A8-%E0%B4%B5%E0%B4%AF%E0%B4%95%E0%B4%95%E0%B4%A3%E0%B4%9F%E0%B4%A8%E0%B4%A8%E0%B4%A4-08-19")
-                btn_request = InlineKeyboardButton("📥 Rᴇqᴜᴇsᴛ", url="https://t.me/+_jTz7AewsI84NmM9")
+                btn_request = InlineKeyboardButton("📥 Rᴇqᴜᴇsᴛ", url="http://t.me/Promoviesearcher_bot")
 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [btn_google],
