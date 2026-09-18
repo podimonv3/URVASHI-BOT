@@ -7,6 +7,7 @@ from pyrogram import enums
 from typing import Union
 import re
 import os
+import time
 from datetime import datetime
 from typing import List
 from database.users_chats_db import db
@@ -354,3 +355,100 @@ def humanbytes(size):
         size /= power
         n += 1
     return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
+
+
+
+def get_progress_bar(completed, total, length=10):
+    progress = completed / total
+    block = int(round(length * progress))
+    # 🟩 ചിഹ്നവും ⬜ ചിഹ്നവും ഉപയോഗിച്ച് ബാർ ഉണ്ടാക്കുന്നു
+    text = "🟩" * block + "⬜" * (length - block)
+    percentage = round(progress * 100, 1)
+    return f"[{text}] {percentage}%"
+
+async def broadcast_messages(user_id, message):
+    try:
+        await message.copy(chat_id=user_id)
+        return True, "Success"
+    except FloodWait as e:
+        await asyncio.sleep(e.x)
+        return await broadcast_messages(user_id, message)
+    except InputUserDeactivated:
+        await db.delete_user(int(user_id))
+        return False, "Deleted"
+    except UserIsBlocked:
+        return False, "Blocked"
+    except PeerIdInvalid:
+        await db.delete_user(int(user_id))
+        return False, "Error"
+    except Exception:
+        return False, "Error"
+
+async def run_broadcast_in_background(client, message, status_msg):
+    start_time = time.time()
+    success = 0
+    blocked = 0
+    deleted = 0
+    failed = 0
+
+    all_users_cursor = await db.get_all_users()
+    total_users = await db.total_users_count() # ആകെ യൂസർമാരുടെ എണ്ണം
+    
+    if total_users == 0:
+        await status_msg.edit("❌ ഡാറ്റാബേസിൽ യൂസർമാർ ആരും തന്നെയില്ല!")
+        return
+
+    processed = 0
+    async for user in all_users_cursor:
+        user_id = user.get('id')
+        if not user_id:
+            continue
+            
+        is_sent, result = await broadcast_messages(int(user_id), message)
+        
+        if is_sent:
+            success += 1
+        elif result == "Blocked":
+            blocked += 1
+        elif result == "Deleted":
+            deleted += 1
+        else:
+            failed += 1
+            
+        processed += 1
+        
+        # ഓരോ 10 യൂസർമാർ കഴിയുമ്പോഴും ടെലിഗ്രാമിലെ മെസ്സേജ് ലൈവ് ആയി പ്രോഗ്രസ് ബാർ സഹിതം അപ്‌ഡേറ്റ് ചെയ്യും
+        if processed % 10 == 0 or processed == total_users:
+            bar = get_progress_bar(processed, total_users)
+            progress_text = (
+                f"📢 **ബ്രോഡ്കാസ്റ്റിംഗ് പുരോഗമിക്കുന്നു...**\n\n"
+                f"📊 Progress: {bar}\n"
+                f"⏳ അയച്ചത്: {processed} / {total_users}\n\n"
+                f"👍 വിജയിച്ചത്: {success}\n"
+                f"🚫 ബ്ലോക്ക് ചെയ്തവർ: {blocked}\n"
+                f"💀 ഡിലീറ്റ് ആയവർ: {deleted}"
+            )
+            try:
+                await status_msg.edit(progress_text)
+            except Exception:
+                pass
+                
+        await asyncio.sleep(0.5)
+
+    # ബ്രോഡ്കാസ്റ്റ് പൂർണ്ണമായി കഴിഞ്ഞാൽ വരാനുള്ള FINAL TEXT
+    end_time = time.time()
+    time_taken = round(end_time - start_time, 2)
+
+    final_text = (
+        f"✅ **ബ്രോഡ്കാസ്റ്റ് വിജയകരമായി പൂർത്തിയായി!**\n\n"
+        f"⏱️ എടുത്ത സമയം: {time_taken} സെക്കന്റ്\n"
+        f"👥 ആകെ യൂസർമാർ: {total_users}\n\n"
+        f"👍 വിജയിച്ചത്: {success}\n"
+        f"🚫 ബ്ലോക്ക് ചെയ്തവർ: {blocked}\n"
+        f"💀 അക്കൗണ്ട് ഡിലീറ്റ് ആയവർ: {deleted}\n"
+        f"❌ പരാജയപ്പെട്ടത്: {failed}"
+    )
+    try:
+        await status_msg.edit(final_text)
+    except Exception:
+        pass
