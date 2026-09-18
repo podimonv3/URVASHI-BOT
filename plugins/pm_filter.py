@@ -693,16 +693,31 @@ async def auto_filter(client, msg, spoll=False):
             files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
             if not files:
                 reqst_gle = search.replace(" ", "+")              
-                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://www.google.com/search?q={reqst_gle}")
+                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://google.com{reqst_gle}")
                 google_row = [btn_google]
 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[google_row])
                 try:
-                    k = await msg.reply_text(text=f"<b>❝ 𝖧𝖾𝗒 {msg.from_user.mention} താഴെ ഉള്ള കാര്യങ്ങൾ ശ്രദ്ധിക്കുക ❞\n\n🔹കറക്റ്റ് സ്പെല്ലിംഗിൽ ചോദിക്കുക. (ഇംഗ്ലീഷിൽ മാത്രം)\n\n🔸സിനിമകൾ ഇംഗ്ലീഷിൽ Type ചെയ്ത് മാത്രം ചോദിക്കുക.\n\n🔹OTT റിലീസ് ആകാത്ത സിനിമകൾ ചോദിക്കരുത്.\n\n🔸സിനിമയുടെ പേര് [വർഷം ഭാഷ] ഈ രീതിയിൽ ചോദിക്കുക.\n\n🔹സിനിമ Request ചെയ്യുമ്പോൾ Symbols ഒഴിവാക്കുക. [+:;'*!-&.. etc\n‼ 𝖱𝖾𝗉𝗈𝗋𝗍 𝗍𝗈 𝖺𝖽𝗆𝗂𝗇 ▶ @MCU_ADMIN_V1_BOT</b>", reply_markup=keyboard)                    
-                    #await k.delete()
+                    # ആദ്യം ഫോട്ടോയും ക്യാപ്ഷനും ആയി അയക്കാൻ നോക്കുന്നു
+                    # SPELL_IMG എന്നതിൽ നിങ്ങളുടെ ഫോട്ടോ ലിങ്ക് / ഫയൽ ഐഡി നൽകുക
+                    k = await msg.reply_photo(
+                        photo="https://files.catbox.moe/oryxah.jpg",
+                        caption=script.SPELL_TEXT.format(msg.from_user.mention),
+                        reply_markup=keyboard,
+                        parse_mode=enums.ParseMode.HTML
+                    )
                     return       
                 except Exception as e:
-                    return 
+                    # ഫോട്ടോ ലോഡ് ആയില്ലെങ്കിൽ (Error വന്നാൽ) ടെക്സ്റ്റ് മെസ്സേജായി അയക്കുന്നു
+                    try:
+                        k = await msg.reply_text(
+                            text=script.SPELL_TEXT.format(msg.from_user.mention), 
+                            reply_markup=keyboard,
+                            parse_mode=enums.ParseMode.HTML
+                        )
+                        return
+                    except Exception:
+                        return
         else:
             return
     else:
@@ -714,7 +729,7 @@ async def auto_filter(client, msg, spoll=False):
         btn = [
             [
                 InlineKeyboardButton(
-                    text=f"[{get_size(file.file_size)}] {file.file_name}", callback_data=f'{pre}#{file.file_id}'
+                    text=f"[{get_size(file.file_size)}]{file.file_name}", callback_data=f'{pre}#{file.file_id}'
                 ),
             ]
             for file in files
@@ -754,7 +769,7 @@ async def auto_filter(client, msg, spoll=False):
         )
         
     # IMDb പൂർണ്ണമായും ഒഴിവാക്കി, നേരിട്ട് സാധാരണ ടെക്സ്റ്റ് ക്യാപ്ഷൻ സെറ്റ് ചെയ്യുന്നു
-    cap = f"<b><i>Found Results For Your Query</i></b>\n\n<b><i><u>©𝐓𝐞𝐚𝐦 𝐔𝐫𝐯𝐚𝐬𝐡𝐢 𝐓𝐡𝐞𝐚𝐭𝐞𝐫𝐬™️</u></i></b>"
+    cap = f"<b><i>Found Results For Your Query {search}</i></b>"
     
     # ഫയലുകളുടെ ബട്ടണുകളോടൊപ്പം മെസ്സേജ് ഗ്രൂപ്പിലേക്ക് അയക്കുന്നു
     fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
