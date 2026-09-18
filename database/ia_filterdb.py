@@ -93,8 +93,6 @@ async def clean_file_name(raw_name: str) -> str:
 async def save_file(media):
     """Save file in database"""
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    
-    # മുകളിൽ ചേർത്ത കണ്ടീഷനുകൾ പ്രകാരം പേര് മാറ്റുന്നു
     file_name = await clean_file_name(str(media.file_name))
     
     try:
@@ -113,17 +111,14 @@ async def save_file(media):
     else:
         try:
             await file.commit()
-            logger.info(f'{file_name} is saved to database')
             return True, 1
         except DuplicateKeyError:      
-            logger.warning(f'{file_name} is already saved in database')
             return False, 0
+
 
 async def save_filea(media):
     """Save file in database"""
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    
-    # മുകളിൽ ചേർത്ത കണ്ടീഷനുകൾ പ്രകാരം പേര് മാറ്റുന്നു
     file_name = await clean_file_name(str(media.file_name))
     
     try:
@@ -142,10 +137,8 @@ async def save_filea(media):
     else:
         try:
             await file.commit()
-            logger.info(f'{file_name} is saved to database')
             return True, 1
         except DuplicateKeyError:      
-            logger.warning(f'{file_name} is already saved in database')
             return False, 0
 
             
