@@ -4,9 +4,11 @@ from pyrogram.errors.exceptions.bad_request_400 import MessageTooLong, PeerIdInv
 from info import ADMINS, LOG_CHANNEL, SUPPORT_CHAT, MELCOW_NEW_USERS, REQ_CHANNEL1, REQ_CHANNEL2
 from database.users_chats_db import db
 from database.ia_filterdb import Media, Mediaa, db as clientDB, db1 as clientDB2, db2 as clientDB3
-from utils import get_size, temp, get_settings
+from utils import get_size, temp, get_settings, run_broadcast_in_background
 from Script import script
 from pyrogram.errors import ChatAdminRequired
+import os
+import asyncio
 
 @Client.on_message(filters.command('stats') & filters.incoming)
 async def get_ststs(bot, message):
@@ -16,21 +18,101 @@ async def get_ststs(bot, message):
     total = tot + tota
     users = await db.total_users_count()
     chats = await db.total_chat_count()
+    
     stats = await clientDB.command('dbStats')
     used_dbSize = (stats['dataSize']/(1024*1024))+(stats['indexSize']/(1024*1024))        
     free_dbSize = 512-used_dbSize
+    
     stats2 = await clientDB2.command('dbStats')
     used_dbSize2 = (stats2['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
     free_dbSize2 = 512-used_dbSize2
+    
     stats3 = await clientDB3.command('dbStats')
-    used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats2['indexSize']/(1024*1024))
+    used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats3['indexSize']/(1024*1024))  # ഇവിടെയുണ്ടായിരുന്ന ചെറിയൊരു സ്പെല്ലിംഗ് മിസ്റ്റേക്ക് തിരുത്തിയിട്ടുണ്ട് (stats2 എന്നത് stats3 ആക്കി)
     free_dbSize3 = 512-used_dbSize3
-    await rju.edit(script.STATUS_TXT2.format(total, tot, round(used_dbSize2, 2), round(free_dbSize2, 2), tota, round(used_dbSize3, 2), round(free_dbSize3, 2), users, chats, round(used_dbSize, 2), round(free_dbSize, 2)))
+    
+    # റിസൾട്ട് ടെക്സ്റ്റ് ഇവിടെ നേരിട്ട് നൽകുന്നു:
+    status_text = (
+        "📊 **Bot Statistics**\n\n"
+        f"▪️ **Total Files:** {total}\n"
+        f"▪️ **Main DB Files (Media):** {tot}\n"
+        f"▪️ **DB 2 Files (Mediaa):** {tota}\n\n"
+        f"▪️ **Total Users:** {users}\n"
+        f"▪️ **Total Chats:** {chats}\n\n"
+        f"🗄 **Database 1 Size:** {round(used_dbSize, 2)} MB / Free: {round(free_dbSize, 2)} MB\n"
+        f"🗄 **Database 2 Size:** {round(used_dbSize2, 2)} MB / Free: {round(free_dbSize2, 2)} MB\n"
+        f"🗄 **Database 3 Size:** {round(used_dbSize3, 2)} MB / Free: {round(free_dbSize3, 2)} MB"
+    )
+    
+    await rju.edit(status_text)
+
+
+@Client.on_message(filters.command("broadcast") & filters.user(ADMINS))
+async def main_broadcast(client, message):
+    if not message.reply_to_message:
+        await message.reply_text("❌ ദയവായി ബ്രോഡ്കാസ്റ്റ് ചെയ്യേണ്ട മെസ്സേജിന് മറുപടിയായി ഈ കമാൻഡ് അയക്കുക.")
+        return
+    status_msg = await message.reply_text("📢 ബ്രോഡ്കാസ്റ്റിംഗ് ബാക്ക്ഗ്രൗണ്ടിൽ ആരംഭിച്ചിട്ടുണ്ട്. പൂർത്തിയാകുമ്പോൾ ഈ മെസ്സേജ് അപ്‌ഡേറ്റ് ആകും...")
+    asyncio.create_task(run_broadcast_in_background(client, message.reply_to_message, status_msg))
+
 
 @Client.on_message(filters.command('chats') & filters.user(ADMINS))
 async def list_chats(bot, message):
-        await message.reply_document('chats.txt', caption="List Of Chats")
+    rju = await message.reply("`Processing... Please wait...`")
+    chats = await db.get_all_chats()  
+    file_name = "chats.txt"
+    with open(file_name, "w", encoding="utf-8") as file:
+        file.write("List of Chats/Groups connected to the bot:\n\n")
+        async for chat in chats:
+            chat_id = chat.get('id', 'N/A')
+            chat_title = chat.get('title', 'Unknown Title')
+            file.write(f"Chat Title: {chat_title} | Chat ID: {chat_id}\n")
+    if os.path.exists(file_name):
+        with open(file_name, 'rb') as doc:
+            await message.reply_document(doc, caption="List Of Chats")
+        await rju.delete()
+        os.remove(file_name)
+    else:
+        await rju.edit("Failed to generate chats.txt file!")
 
+
+
+@Client.on_message(filters.command('users') & filters.user(ADMINS))
+async def list_users(bot, message):
+    raju = await message.reply('Getting List Of Users...')
+    users = await db.get_all_users()
+    out = "Users Saved In DB Are:\n\n"
+    
+    async for user in users:
+        out += f"Name: {user['name']} | ID: {user['id']}"
+        if user['ban_status']['is_banned']:
+            out += ' ( Banned User )'
+        out += '\n'
+        
+    # എപ്പോഴും .txt ഫയൽ ആയി മാത്രം അയക്കാൻ വേണ്ടി:
+    file_name = 'users.txt'
+    with open(file_name, 'w+', encoding='utf-8') as outfile:
+        outfile.write(out)
+        
+    await message.reply_document(file_name, caption="List Of Users")
+    await raju.delete()
+
+@Client.on_message(filters.command('gen_link') & filters.user(ADMINS))
+async def gen_invite(bot, message):
+    if len(message.command) == 1:
+        return await message.reply('Give me a chat id')
+    chat = message.command[1]
+    try:
+        chat = int(chat)
+    except:
+        return await message.reply('Give Me A Valid Chat ID')
+    try:
+        link = await bot.create_chat_invite_link(chat)
+    except ChatAdminRequired:
+        return await message.reply("Invite Link Generation Failed, Iam Not Having Sufficient Rights")
+    except Exception as e:
+        return await message.reply(f'Error {e}')
+    await message.reply(f'Here is your Invite Link {link.invite_link}')
 
 
 @Client.on_message(filters.command('purge_one') & filters.private & filters.user(ADMINS))
