@@ -1,5 +1,6 @@
 import logging
 from struct import pack
+import os
 import re
 import base64
 from pyrogram.file_id import FileId
@@ -69,12 +70,33 @@ async def check_file(media):
         okda = "okda"
         return okda
         
+
+
+async def clean_file_name(raw_name: str) -> str:
+    """ഫയൽ നെയിം ശുദ്ധീകരിക്കാനുള്ള ഹെൽപർ ഫങ്ഷൻ"""
+    # 1. ഫയൽ എക്സ്റ്റൻഷൻ നീക്കം ചെയ്യുന്നു (.mp4, .mkv മുതലായവ)
+    name_without_ext, _ = os.path.splitext(raw_name)
+    
+    # 2. അപ്പോസ്ട്രോഫികൾ (') പൂർണ്ണമായി ഒഴിവാക്കുന്നു (i'm -> im)
+    name_no_apostrophe = name_without_ext.replace("'", "")
+    
+    # 3 & 4. മലയാളം, ഇംഗ്ലീഷ് (A-Z, a-z), അക്കങ്ങൾ (0-9) എന്നിവ മാത്രം നിലനിർത്തുന്നു.
+    # മറ്റെല്ലാ പ്രത്യേക ചിഹ്നങ്ങൾക്ക് പകരവും സ്പേസ് നൽകുന്നു.
+    # [^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039] എന്നത് മലയാളം, ഇംഗ്ലീഷ്, അക്കങ്ങൾ അല്ലാത്തവയെ സൂചിപ്പിക്കുന്നു.
+    cleaned_chars = re.sub(r'[^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039]', ' ', name_no_apostrophe)
+    
+    # 5. അനാവശ്യമായ ഒന്നിലധികം സ്പേസുകൾ ഒഴിവാക്കി ഒരൊറ്റ സ്പേസ് ആക്കുന്നു, ഇരുവശത്തെയും സ്പേസ് കളയുന്നു.
+    final_name = re.sub(r'\s+', ' ', cleaned_chars).strip()
+    
+    return final_name
+
 async def save_file(media):
     """Save file in database"""
-
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    
+    # മുകളിൽ ചേർത്ത കണ്ടീഷനുകൾ പ്രകാരം പേര് മാറ്റുന്നു
+    file_name = await clean_file_name(str(media.file_name))
+    
     try:
         file = Media(
             file_id=file_id,
@@ -91,22 +113,19 @@ async def save_file(media):
     else:
         try:
             await file.commit()
-        except DuplicateKeyError:      
-            logger.warning(
-                f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
-            )
-
-            return False, 0
-        else:
-            logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
+            logger.info(f'{file_name} is saved to database')
             return True, 1
+        except DuplicateKeyError:      
+            logger.warning(f'{file_name} is already saved in database')
+            return False, 0
 
 async def save_filea(media):
     """Save file in database"""
-
-    # TODO: Find better way to get same file_id for same media to avoid duplicates
     file_id, file_ref = unpack_new_file_id(media.file_id)
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(media.file_name))
+    
+    # മുകളിൽ ചേർത്ത കണ്ടീഷനുകൾ പ്രകാരം പേര് മാറ്റുന്നു
+    file_name = await clean_file_name(str(media.file_name))
+    
     try:
         file = Mediaa(
             file_id=file_id,
@@ -123,15 +142,12 @@ async def save_filea(media):
     else:
         try:
             await file.commit()
-        except DuplicateKeyError:      
-            logger.warning(
-                f'{getattr(media, "file_name", "NO_FILE")} is already saved in database'
-            )
-
-            return False, 0
-        else:
-            logger.info(f'{getattr(media, "file_name", "NO_FILE")} is saved to database')
+            logger.info(f'{file_name} is saved to database')
             return True, 1
+        except DuplicateKeyError:      
+            logger.warning(f'{file_name} is already saved in database')
+            return False, 0
+
             
 
 async def delete_files_below_threshold(db, threshold_size_mb: int = 50, batch_size: int = 20, chat_id: int = None, message_id: int = None):
