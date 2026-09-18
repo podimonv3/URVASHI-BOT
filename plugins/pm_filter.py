@@ -698,27 +698,64 @@ async def auto_filter(client, msg, spoll=False):
         if re.findall("((^\/|^,|^!|^\.|^[\U0001F600-\U000E007F]).*)", message.text):
             return
         if 2 < len(message.text) < 100:
+            
+            # --- 1. ഡാറ്റാബേസ് സെർച്ചിന് മുൻപ് തന്നെ വാക്ക് ക്ലീൻ ചെയ്യുന്നു ---
             search = message.text
-            files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
-            if not files:
-                reqst_gle = search.replace(" ", "+")              
-                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://google.com/{reqst_gle}")
-                
-                # പുതിയ രണ്ട് ബട്ടണുകൾ ഇവിടെ ചേർത്തിരിക്കുന്നു
-                btn_rules = InlineKeyboardButton("📜 Rᴜʟᴇs", url="http://telegra.ph/Request-%E0%B4%85%E0%B4%AF%E0%B4%95%E0%B4%95-%E0%B4%AE%E0%B4%A8%E0%B4%A8-%E0%B4%B5%E0%B4%AF%E0%B4%95%E0%B4%95%E0%B4%A3%E0%B4%9F%E0%B4%A8%E0%B4%A8%E0%B4%A4-08-19")
-                btn_request = InlineKeyboardButton("📥 Rᴇqᴜᴇsᴛ", url="https://t.me/+VqyHBSateMcwNjU9")
+            
+            # കണ്ണുകൊണ്ട് കാണാത്ത ഹിഡൻ ക്യാരക്ടറുകൾ നീക്കം ചെയ്യുന്നു
+            search = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', search)
 
-                # എല്ലാ ബട്ടണുകളും ഇൻലൈൻ കീബോർഡിലേക്ക് ക്രമീകരിക്കുന്നു
-                # ഗൂഗിൾ ബട്ടൺ മുകളിലും, റൂൾസ് & റിക്വസ്റ്റ് ബട്ടണുകൾ തൊട്ടുതാഴെ ഒരുമിച്ചും വരും
+            # എല്ലാ പ്രത്യേക സ്പേസുകളെയും സാധാരണ സ്പേസ് ആക്കുന്നു
+            search = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', search)
+
+            # അപ്പോസ്ട്രോഫിയും വളഞ്ഞ സിംഗിൾ കോമകളും പൂർണ്ണമായി നീക്കം ചെയ്യുന്നു
+            search = re.sub(r"['‘’]", "", search)
+                    
+            # ചിഹ്നങ്ങളും ബ്രാക്കറ്റുകളും മാറ്റി സ്പേസ് ആക്കുന്നു
+            search = re.sub(r"[-–—_,#&?/( )\[\]\\\":\.¡%“”]", " ", search)
+            
+            # പ്രിന്റ് ടൈപ്പുകൾ മാത്രം മാറ്റുന്നു (movie, movies, moovie എന്നിവ ഇവിടെ നിന്നും ഒഴിവാക്കി)
+            search = re.sub(r"\b(hd|full|print|file)\b", "", search, flags=re.IGNORECASE)                       
+                                
+            # അനാവശ്യ വാക്കുകൾ ഒരു സെറ്റ് (Set) വഴി ഫിൽട്ടർ ചെയ്ത് മാറ്റുന്നു
+            find = search.lower().split(" ")
+            removes = {
+                "pls", "plz", "plzz", "please", "send", "snd", "snt",
+                "gib", "veno", "venam", "venum",
+                "undo", "ayakkumo", "ayakkamo", "und", "move", 
+                "multi", "dubb", "dub", "bro", "bruh", "broh", "dubbed", "link", "lnk",
+                "iruka", "pannunga", "pannungga", "anuppunga", "anupunga", "anuppungga", 
+                "anupungga", "subtile", "kitti", "kitty", "tharu", "kittumo", "kittum",
+                "da", "mwonse", "bhai", "share", "malayalm", "malylm", "subtitle"
+            }
+            search = " ".join([w for w in find if w not in removes])
+            
+            # അനാവശ്യ സ്പേസുകൾ കളയുന്നു
+            search = re.sub(r"\s+", " ", search).strip()
+            
+            # ക്ലീൻ ചെയ്ത ശേഷം വാക്കുകൾ ഒന്നും ബാക്കിയില്ലെങ്കിൽ സെർച്ച് ചെയ്യേണ്ടതില്ല
+            if not search:
+                return
+
+            # --- 2. ഇപ്പോൾ ക്ലീൻ ചെയ്ത കൃത്യമായ വാക്ക് വെച്ച് ഡാറ്റാബേസിൽ തിരയുന്നു ---
+            files, offset, total_results = await get_search_results(search.lower(), offset=0, filter=True)
+            
+            # ക്ലീൻ ചെയ്തിട്ടും ഡാറ്റാബേസിൽ ഫയലുകൾ ഒന്നും തന്നെ കണ്ടെത്തിയില്ലെങ്കിൽ മാത്രം ഗൂഗിൾ ബട്ടൺ കാണിക്കുന്നു
+            if not files:
+                # സ്പേസുകൾക്ക് പകരം '+' ചേർത്ത് ഗൂഗിൾ യുആർഎൽ നിർമ്മിക്കുന്നു
+                reqst_gle = search.replace(" ", "+")
+                
+                btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://www.google.com/search?q={reqst_gle}")
+                btn_rules = InlineKeyboardButton("📜 Rᴜʟᴇs", url="http://telegra.ph/Request-%E0%B4%85%E0%B4%AF%E0%B4%95%E0%B4%95-%E0%B4%AE%E0%B4%A8%E0%B4%A8-%E0%B4%B5%E0%B4%AF%E0%B4%95%E0%B4%95%E0%B4%A3%E0%B4%9F%E0%B4%A8%E0%B4%A8%E0%B4%A4-08-19")
+                btn_request = InlineKeyboardButton("📥 Rᴇqᴜᴇsᴛ", url="https://t.me/+_jTz7AewsI84NmM9")
+
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [btn_google],
                     [btn_rules, btn_request]
-                ])
+                ])                
                 try:
-                    # ആദ്യം ഫോട്ടോയും ക്യാപ്ഷനും ആയി അയക്കാൻ നോക്കുന്നു
-                    # SPELL_IMG എന്നതിൽ നിങ്ങളുടെ ഫോട്ടോ ലിങ്ക് / ഫയൽ ഐഡി നൽകുക
-                    k = await msg.reply_video(
-                        video="https://files.catbox.moe/rb7k4l",
+                    k = await msg.reply_photo(
+                        photo="https://files.catbox.moe/yt159d.jpg",
                         caption=script.SPELL_TEXT.format(msg.from_user.mention),
                         reply_markup=keyboard,
                         parse_mode=enums.ParseMode.HTML
