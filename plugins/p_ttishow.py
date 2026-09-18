@@ -133,14 +133,27 @@ async def total_requests(bot, message):
     rju = await message.reply('Fetching stats..')
     total_one = await db.get_all_one_count()
     total_two = await db.get_all_two_count()
+    
     if REQ_CHANNEL1 != False: 
         req_channel1 = await bot.get_chat(REQ_CHANNEL1)
         req_channel1 = req_channel1.title
     else:
         req_channel1 = "REQ_CHANNEL1"
+        
     if REQ_CHANNEL2 != False:
         req_channel2 = await bot.get_chat(REQ_CHANNEL2)
         req_channel2 = req_channel2.title
     else:
         req_channel2 = "REQ_CHANNEL2"
-    await rju.edit(f"{req_channel1} : {total_one}\n{req_channel2} : {total_two}")
+    
+    # 🛠️ MessageNotModified എറർ ഒഴിവാക്കാനായി try...except ബ്ലോക്ക് ചേർത്തു
+    try:
+        await rju.edit(
+            f"<b>📊 Total Join Requests Stats</b>\n\n"
+            f"📢 {req_channel1} : <code>{total_one}</code>\n"
+            f"📢 {req_channel2} : <code>{total_two}</code>",
+            parse_mode=enums.ParseMode.HTML
+        )
+    except Exception:
+        # ഒരേ ഡാറ്റ വെച്ച് വീണ്ടും എഡിറ്റ് ചെയ്യാൻ നോക്കുമ്പോൾ വരുന്ന എറർ ഇവിടെ സ്കിപ്പ് ചെയ്യും
+        pass
