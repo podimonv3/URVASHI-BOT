@@ -103,11 +103,13 @@ async def send_for_index(bot, message):
         last_msg_id = int(match.group(5))
         if chat_id.isnumeric():
             chat_id  = int(("-100" + chat_id))
-    elif message.forward_from_chat.type == enums.ChatType.CHANNEL:
+    # ഇവിടെയാണ് സുരക്ഷിതമായ മാറ്റം വരുത്തിയിരിക്കുന്നത്
+    elif message.forward_from_chat and message.forward_from_chat.type == enums.ChatType.CHANNEL:
         last_msg_id = message.forward_from_message_id
         chat_id = message.forward_from_chat.username or message.forward_from_chat.id
     else:
-        return
+        return await message.reply('ദയവായി ഒരു പബ്ലിക് ചാനലിൽ നിന്നുള്ള മെസ്സേജ് ഫോർവേഡ് ചെയ്യുക അല്ലെങ്കിൽ ശരിയായ മെസ്സേജ് ലിങ്ക് നൽകുക.')
+
     try:
         await bot.get_chat(chat_id)
     except ChannelInvalid:
@@ -153,7 +155,10 @@ async def send_for_index(bot, message):
         except ChatAdminRequired:
             return await message.reply('Make sure iam an admin in the chat and have permission to invite users.')
     else:
-        link = f"@{message.forward_from_chat.username}"
+        # ഇവിടെ മറ്റൊരു എറർ വരാൻ സാധ്യതയുള്ള ഭാഗവും ശരിയാക്കിയിട്ടുണ്ട്
+        username = message.forward_from_chat.username if message.forward_from_chat else chat_id
+        link = f"@{username}"
+        
     buttons = [
         [
             InlineKeyboardButton('Accept to DB1',
