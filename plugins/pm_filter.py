@@ -825,8 +825,8 @@ async def auto_filter(client, msg, spoll=False):
         )
         
     # IMDb പൂർണ്ണമായും ഒഴിവാക്കി, നേരിട്ട് സാധാരണ ടെക്സ്റ്റ് ക്യാപ്ഷൻ സെറ്റ് ചെയ്യുന്നു
-    cap = f"<b><i>Found Results For Your Query {search}</i></b>"
-    
+    cap = f"<b><i>Found Results For Your Query {search}</i></b>\n\n<b><i>For better result:</i></b>\n<i>bhramam ❌\nbhramam ✅</i>"
+
     # ഫയലുകളുടെ ബട്ടണുകളോടൊപ്പം മെസ്സേജ് ഗ്രൂപ്പിലേക്ക് അയക്കുന്നു
     fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
        
@@ -842,13 +842,25 @@ async def global_filters(client, message, text=False):
         return False
 
     # --- 1. ഡാറ്റാബേസ് സെർച്ചിന് മുൻപ് തന്നെ വാക്ക് ക്ലീൻ ചെയ്യുന്നു ---
+    # ഇമോജികൾ പൂർണ്ണമായി നീക്കം ചെയ്യുന്നു
     search = emoji.replace_emoji(raw_name, replace='')
+    
+    # കണ്ണുകൊണ്ട് കാണാത്ത ഹിഡൻ ക്യാരക്ടറുകൾ നീക്കം ചെയ്യുന്നു
     search = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', search)
+
+    # എല്ലാ പ്രത്യേക സ്പേസുകളെയും സാധാരണ സ്പേസ് ആക്കുന്നു
     search = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', search)
+
+    # അപ്പോസ്ട്രോഫിയും വളഞ്ഞ സിംഗിൾ കോമകളും പൂർണ്ണമായി നീക്കം ചെയ്യുന്നു
     search = re.sub(r"['‘’]", "", search)
+            
+    # ചിഹ്നങ്ങളും ബ്രാക്കറ്റുകളും മാറ്റി സ്പേസ് ആക്കുന്നു
     search = re.sub(r"[-–—_,#&?/( )\[\]\\\":\.¡%“”]", " ", search)
+    
+    # പ്രിന്റ് ടൈപ്പുകൾ മാത്രം മാറ്റുന്നു
     search = re.sub(r"\b(hd|full|print|file)\b", "", search, flags=re.IGNORECASE)                       
                         
+    # അനാവശ്യ വാക്കുകൾ ഒരു സെറ്റ് (Set) വഴി ഫിൽട്ടർ ചെയ്ത് മാറ്റുന്നു
     find = search.lower().split(" ")
     removes = {
         "pls", "plz", "plzz", "please", "send", "snd", "snt",
@@ -860,84 +872,71 @@ async def global_filters(client, message, text=False):
         "da", "mwonse", "bhai", "share", "malayalm", "malylm", "subtitle"
     }
     search = " ".join([w for w in find if w not in removes])
+    
+    # അനാവശ്യ സ്പേസുകൾ കളഞ്ഞു ഫൈനൽ ക്ലീൻ നെയിം എടുക്കുന്നു
     clean_name = re.sub(r"\s+", " ", search).strip()
     
+    # ക്ലീൻ ചെയ്ത ശേഷം ടെക്സ്റ്റ് ഒന്നും ബാക്കിയില്ലെങ്കിൽ ഫങ്ഷൻ അവസാനിപ്പിക്കുന്നു
     if not clean_name:
         return False
 
     reply_id = message.reply_to_message.id if message.reply_to_message else message.id
     keywords = await get_gfilters('gfilters')
     
-    if keywords:
-        for keyword in reversed(sorted(keywords, key=len)):
-            pattern = r"^" + re.escape(keyword.strip().lower()) + r"$"
-            
-            if re.match(pattern, clean_name, flags=re.IGNORECASE):
-                reply_text, btn, alert, fileid = await find_gfilter('gfilters', keyword)
+    if not keywords:
+        return False
 
-                if reply_text:
-                    reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
+    for keyword in reversed(sorted(keywords, key=len)):
+        # കൃത്യമായി ആ വാക്ക് മാത്രമാണോ എന്ന് പരിശോധിക്കാനുള്ള പാറ്റേൺ (Exact Match)
+        pattern = r"^" + re.escape(keyword.strip().lower()) + r"$"
+        
+        if re.match(pattern, clean_name, flags=re.IGNORECASE):
+            reply_text, btn, alert, fileid = await find_gfilter('gfilters', keyword)
 
-                try:
-                    button_markup = None
-                    if btn and str(btn).strip() not in ["[]", "None", "False", ""]:
-                        try:
-                            parsed_btn = ast.literal_eval(btn)
-                            button_markup = InlineKeyboardMarkup(parsed_btn)
-                        except:
-                            button_markup = None
+            if reply_text:
+                reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
-                    if str(fileid).strip() in ["None", "", "False"]:
-                        sent_msg = await client.send_message(
-                            group_id, 
-                            reply_text or "No text provided", 
-                            disable_web_page_preview=True,
-                            reply_markup=button_markup,
-                            reply_to_message_id=reply_id
-                        )
-                    else:
-                        sent_msg = await client.send_cached_media(
-                            group_id,
-                            fileid,
-                            caption=reply_text or "",
-                            reply_markup=button_markup,
-                            reply_to_message_id=reply_id
-                        )
-
-                    # 60 സെക്കന്റിന് ശേഷം മെസ്സേജുകൾ ഡിലീറ്റ് ചെയ്യുന്നു
-                    await asyncio.sleep(60)
+            try:
+                button_markup = None
+                # ബട്ടൺ ഉണ്ടോ എന്ന് നോക്കുന്നു, കൂടാതെ ബട്ടൺ ഇല്ലെങ്കിൽ ഡാറ്റാബേസിൽ "[]" അല്ലെങ്കിൽ "None" ആയിരിക്കും വരിക
+                if btn and str(btn).strip() not in ["[]", "None", "False", ""]:
                     try:
-                        await sent_msg.delete()
-                        await message.delete()
-                    except:
-                        pass  # എറർ ഉണ്ടായാലും ലോഗ് ചെയ്യാതെ വിടുന്നു
+                        # eval-ന് പകരം സുരക്ഷിതമായ ast.literal_eval ഉപയോഗിച്ച് പൈത്തൺ ലിസ്റ്റ് ആക്കുന്നു
+                        parsed_btn = ast.literal_eval(btn)
+                        button_markup = InlineKeyboardMarkup(parsed_btn)
+                    except Exception as btn_err:
+                        logger.error(f"Error parsing button for keyword '{keyword}': {btn_err}")
+                        button_markup = None
 
-                except:
-                    pass  # Koyeb ലോഗ്സിൽ വരാതിരിക്കാൻ exception ലോഗർ മാറ്റി
-                
-                return True
+                # 1. ഫയൽ (മീഡിയ) ഇല്ലാത്ത അവസ്ഥയിൽ ടെക്സ്റ്റ് മെസ്സേജ് അയക്കുന്നു
+                if str(fileid).strip() in ["None", "", "False"]:
+                    sent_msg = await client.send_message(
+                        group_id, 
+                        reply_text or "No text provided", 
+                        disable_web_page_preview=True,
+                        reply_markup=button_markup,
+                        reply_to_message_id=reply_id
+                    )
+                # 2. ഫയൽ (മീഡിയ) ഉണ്ടെങ്കിൽ അത് അയക്കുന്നു
+                else:
+                    sent_msg = await client.send_cached_media(
+                        group_id,
+                        fileid,
+                        caption=reply_text or "",
+                        reply_markup=button_markup,
+                        reply_to_message_id=reply_id
+                    )
 
-    # -----------------------------------------------------------------
-    # ഡാറ്റാബേസിൽ കീവേഡ് കണ്ടെത്താത്ത അവസ്ഥയിൽ പ്രവർത്തിക്കുന്ന ഭാഗം
-    # -----------------------------------------------------------------
-    try:
-        not_found_msg = f"ഇല്ല"
-        
-        sent_msg = await client.send_message(
-            group_id,
-            not_found_msg,
-            reply_to_message_id=reply_id
-        )
-        
-        # 15 സെക്കന്റിന് ശേഷം 'Not Found' മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു
-        await asyncio.sleep(15)
-        try:
-            await sent_msg.delete()
-            await message.delete()
-        except:
-            pass  # ഡിലീറ്റ് ചെയ്യാൻ പറ്റിയില്ലെങ്കിലും ലോഗ് ചെയ്യില്ല
+                # 60 സെക്കന്റിന് ശേഷം മെസ്സേജുകൾ ഡിലീറ്റ് ചെയ്യുന്നു
+                await asyncio.sleep(60)
+                try:
+                    await sent_msg.delete()                 
+                except Exception as e:
+                    logger.warning(f"Failed to delete messages: {e}")
 
-    except:
-        pass  # ഇവിടെ വരുന്ന ഒരു എററും Koyeb ലോഗിലേക്ക് പോവില്ല
+            except Exception as e:
+                logger.exception(f"Error in global_filters execution: {e}")
+            
+            return True
             
     return False
