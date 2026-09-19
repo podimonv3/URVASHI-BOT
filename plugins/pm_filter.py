@@ -825,7 +825,7 @@ async def auto_filter(client, msg, spoll=False):
         )
         
     # IMDb പൂർണ്ണമായും ഒഴിവാക്കി, നേരിട്ട് സാധാരണ ടെക്സ്റ്റ് ക്യാപ്ഷൻ സെറ്റ് ചെയ്യുന്നു
-    cap = f"<b><i>Found Results For Your Query {search}</i></b>\n\n<b><i>For better result:</i></b>\n<i>bhramam ❌\nbhramam ✅</i>"
+    cap = f"<b><i>Found Results For Your Query {search}</i></b>\n\n<b><i><u>For better result:</u></i></b>\n<i>↪bhramam      ❌\n↪bhramam 2021 ✅</i>"
 
     # ഫയലുകളുടെ ബട്ടണുകളോടൊപ്പം മെസ്സേജ് ഗ്രൂപ്പിലേക്ക് അയക്കുന്നു
     fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
