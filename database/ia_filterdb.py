@@ -206,7 +206,7 @@ async def get_bad_files(query, file_type=None, filter=False):
 
     return files_media1, files_media2, total_results
         
-async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
+async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
     """Smart Exact Match & Natural Sorting (User Code Optimized)"""
 
     # 1. സെർച്ച് ക്വറി ഡാറ്റാബേസ് ഫോർമാറ്റിലേക്ക് ക്ലീൻ ചെയ്യുന്നു
