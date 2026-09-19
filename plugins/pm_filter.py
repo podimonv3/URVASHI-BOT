@@ -29,15 +29,15 @@ import logging
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
 
-# --- 🛠️ TELEGRAM QUERY ID ERROR FIX START 🛠️ ---
+# --- 🛠️ TELEGRAM ERROR FIXES START 🛠️ ---
 _original_answer = CallbackQuery.answer
 async def _patched_answer(self, *args, **kwargs):
     try:
         return await _original_answer(self, *args, **kwargs)
-    except QueryIdInvalid:
+    except (QueryIdInvalid, FloodWait):  # 💡 FloodWait കൂടി ഇവിടെ ചേർത്തു
         pass
 CallbackQuery.answer = _patched_answer
-# --- 🛠️ TELEGRAM QUERY ID ERROR FIX END 🛠️ ---
+# --- 🛠️ TELEGRAM ERROR FIXES END 🛠️ ---
 
 
 BUTTONS = {}
@@ -301,12 +301,19 @@ async def next_page(bot, query):
                 InlineKeyboardButton("Nᴇxᴛ ⤷", callback_data=f"next_{req}_{key}_{n_offset}")
             ],
         )
+        
+    # 🛠️ FLOOD_WAIT ERROR HANDLING ADDED HERE
     try:
         await query.edit_message_reply_markup(
             reply_markup=InlineKeyboardMarkup(btn)
         )
     except MessageNotModified:
         pass
+    except FloodWait as e:
+        # ടെലിഗ്രാം റേറ്റ് ലിമിറ്റ് അടിക്കുമ്പോൾ ബോട്ട് ക്രാഷ് ആവാതെ യൂസർക്ക് മുന്നറിയിപ്പ് നൽകുന്നു
+        await query.answer(f"വളരെ വേഗത്തിലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
+        return
+        
     await query.answer()
 
 
