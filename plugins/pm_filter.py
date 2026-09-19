@@ -829,11 +829,8 @@ async def auto_filter(client, msg, spoll=False):
 
     # ഫയലുകളുടെ ബട്ടണുകളോടൊപ്പം മെസ്സേജ് ഗ്രൂപ്പിലേക്ക് അയക്കുന്നു
     fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
-       
-    await asyncio.sleep(300)
-    await fmsg.delete()
-    
-   
+           
+      
 async def global_filters(client, message, text=False):
     group_id = message.chat.id
     raw_name = text or message.text
