@@ -834,6 +834,7 @@ async def auto_filter(client, msg, spoll=False):
     await fmsg.delete()
     
    
+
 async def global_filters(client, message, text=False):
     group_id = message.chat.id
     raw_name = text or message.text
@@ -842,25 +843,13 @@ async def global_filters(client, message, text=False):
         return False
 
     # --- 1. ഡാറ്റാബേസ് സെർച്ചിന് മുൻപ് തന്നെ വാക്ക് ക്ലീൻ ചെയ്യുന്നു ---
-    # ഇമോജികൾ പൂർണ്ണമായി നീക്കം ചെയ്യുന്നു
     search = emoji.replace_emoji(raw_name, replace='')
-    
-    # കണ്ണുകൊണ്ട് കാണാത്ത ഹിഡൻ ക്യാരക്ടറുകൾ നീക്കം ചെയ്യുന്നു
     search = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', search)
-
-    # എല്ലാ പ്രത്യേക സ്പേസുകളെയും സാധാരണ സ്പേസ് ആക്കുന്നു
     search = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', search)
-
-    # അപ്പോസ്ട്രോഫിയും വളഞ്ഞ സിംഗിൾ കോമകളും പൂർണ്ണമായി നീക്കം ചെയ്യുന്നു
     search = re.sub(r"['‘’]", "", search)
-            
-    # ചിഹ്നങ്ങളും ബ്രാക്കറ്റുകളും മാറ്റി സ്പേസ് ആക്കുന്നു
     search = re.sub(r"[-–—_,#&?/( )\[\]\\\":\.¡%“”]", " ", search)
-    
-    # പ്രിന്റ് ടൈപ്പുകൾ മാത്രം മാറ്റുന്നു
     search = re.sub(r"\b(hd|full|print|file)\b", "", search, flags=re.IGNORECASE)                       
                         
-    # അനാവശ്യ വാക്കുകൾ ഒരു സെറ്റ് (Set) വഴി ഫിൽട്ടർ ചെയ്ത് മാറ്റുന്നു
     find = search.lower().split(" ")
     removes = {
         "pls", "plz", "plzz", "please", "send", "snd", "snt",
@@ -872,11 +861,8 @@ async def global_filters(client, message, text=False):
         "da", "mwonse", "bhai", "share", "malayalm", "malylm", "subtitle"
     }
     search = " ".join([w for w in find if w not in removes])
-    
-    # അനാവശ്യ സ്പേസുകൾ കളഞ്ഞു ഫൈനൽ ക്ലീൻ നെയിം എടുക്കുന്നു
     clean_name = re.sub(r"\s+", " ", search).strip()
     
-    # ക്ലീൻ ചെയ്ത ശേഷം ടെക്സ്റ്റ് ഒന്നും ബാക്കിയില്ലെങ്കിൽ ഫങ്ഷൻ അവസാനിപ്പിക്കുന്നു
     if not clean_name:
         return False
 
@@ -887,7 +873,6 @@ async def global_filters(client, message, text=False):
         return False
 
     for keyword in reversed(sorted(keywords, key=len)):
-        # കൃത്യമായി ആ വാക്ക് മാത്രമാണോ എന്ന് പരിശോധിക്കാനുള്ള പാറ്റേൺ (Exact Match)
         pattern = r"^" + re.escape(keyword.strip().lower()) + r"$"
         
         if re.match(pattern, clean_name, flags=re.IGNORECASE):
@@ -896,19 +881,21 @@ async def global_filters(client, message, text=False):
             if reply_text:
                 reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
-            try:
-                button_markup = None
-                # ബട്ടൺ ഉണ്ടോ എന്ന് നോക്കുന്നു, കൂടാതെ ബട്ടൺ ഇല്ലെങ്കിൽ ഡാറ്റാബേസിൽ "[]" അല്ലെങ്കിൽ "None" ആയിരിക്കും വരിക
-                if btn and str(btn).strip() not in ["[]", "None", "False", ""]:
-                    try:
-                        # eval-ന് പകരം സുരക്ഷിതമായ ast.literal_eval ഉപയോഗിച്ച് പൈത്തൺ ലിസ്റ്റ് ആക്കുന്നു
-                        parsed_btn = ast.literal_eval(btn)
-                        button_markup = InlineKeyboardMarkup(parsed_btn)
-                    except Exception as btn_err:
-                        logger.error(f"Error parsing button for keyword '{keyword}': {btn_err}")
-                        button_markup = None
+            button_markup = None
+            if btn and str(btn).strip() not in ["[]", "None", "False", ""]:
+                try:
+                    # നിങ്ങളുടെ ബട്ടണുകളെ സുരക്ഷിതമായി eval ചെയ്യാൻ ഇത് സഹായിക്കും
+                    safe_dict = {
+                        "InlineKeyboardButton": InlineKeyboardButton,
+                        "InlineKeyboardMarkup": InlineKeyboardMarkup
+                    }
+                    button_markup = InlineKeyboardMarkup(eval(str(btn), {"__builtins__": None}, safe_dict))
+                except Exception as btn_err:
+                    logger.error(f"Error parsing button for keyword '{keyword}': {btn_err}")
+                    button_markup = None
 
-                # 1. ഫയൽ (മീഡിയ) ഇല്ലാത്ത അവസ്ഥയിൽ ടെക്സ്റ്റ് മെസ്സേജ് അയക്കുന്നു
+            sent_msg = None
+            try:
                 if str(fileid).strip() in ["None", "", "False"]:
                     sent_msg = await client.send_message(
                         group_id, 
@@ -917,7 +904,6 @@ async def global_filters(client, message, text=False):
                         reply_markup=button_markup,
                         reply_to_message_id=reply_id
                     )
-                # 2. ഫയൽ (മീഡിയ) ഉണ്ടെങ്കിൽ അത് അയക്കുന്നു
                 else:
                     sent_msg = await client.send_cached_media(
                         group_id,
@@ -926,17 +912,22 @@ async def global_filters(client, message, text=False):
                         reply_markup=button_markup,
                         reply_to_message_id=reply_id
                     )
-
-                # 60 സെക്കന്റിന് ശേഷം മെസ്സേജുകൾ ഡിലീറ്റ് ചെയ്യുന്നു
-                await asyncio.sleep(60)
-                try:
-                    await sent_msg.delete()                 
-                except Exception as e:
-                    logger.warning(f"Failed to delete messages: {e}")
-
             except Exception as e:
-                logger.exception(f"Error in global_filters execution: {e}")
+                logger.exception(f"Error sending filter message: {e}")
+                return False
+
+            # മെസ്സേജ് ഡിലീഷൻ ബാക്ക്ഗ്രൗണ്ടിലേക്ക് മാറ്റുന്നു (Non-blocking)
+            if sent_msg:
+                asyncio.create_task(delete_after_delay(sent_msg, 60))
             
             return True
             
     return False
+
+async def delete_after_delay(msg_obj, delay: int):
+    """ബോട്ടിനെ ലാഗ് അടിപ്പിക്കാതെ ബാക്ക്ഗ്രൗണ്ടിൽ മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു."""
+    await asyncio.sleep(delay)
+    try:
+        await msg_obj.delete()
+    except Exception as e:
+        logger.warning(f"Failed to delete message: {e}")
