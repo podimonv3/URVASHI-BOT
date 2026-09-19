@@ -2,11 +2,16 @@ class script(object):
     START_TXT = """<blockquote><b>Welcome {},</b></blockquote>
 
 <i>This is an automated movie delivery system built exclusively for our official community.</i>
-<i>If Any Bug Please Contact Admin 👉<a href="https://t.me/Adhityan_edavattom">Coder™</a></i>
+<i>If Any Bug Please Contact Admins 👇
 <b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
-<b>⚡ Powered by:</b>
-👉 <u><b><i><a href="https://t.me/UrvashiTheaters_Main">©𝐓𝐞𝐚𝐦 𝐔𝐫𝐯𝐚𝐬𝐡𝐢 𝐓𝐡𝐞𝐚𝐭𝐞𝐫𝐬™️</a></u></b></i>
-<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>"""
+<a href="https://t.me/Adhityan_edavattom">Admin™ I</a></i>
+<a href="https://t.me/SreejithSKumar">Admin™ II</a></i>
+<a href="https://t.me/Akhilkrishnan121">Admin™ III</a></i>
+<a href="https://t.me/Promoviesearcher_bot">Admin™ IV</a></i>
+<a href="https://t.me/Roopak_raj">Admin™ V</a></i>
+<b>━━━━━━━━━━━━━━━━━━━━━━━━━━━━</b>
+<b>Powered by:</b>
+<u><b><i><a href="https://t.me/UrvashiTheaters_Main">𝐓𝐞𝐚𝐦 𝐔𝐫𝐯𝐚𝐬𝐡𝐢 𝐓𝐡𝐞𝐚𝐭𝐞𝐫𝐬™️</a></u></b></i>"""
 
     SPELL_TEXT = """<b><i><u>🚸നിർദ്ദേശങ്ങൾ🚸</u></b></i>
 <b><i> 🌿 OTT റിലീസ് ആവാത്ത മൂവീസ് ചോദിച്ചു സമയം കളയണ്ട കിട്ടില്ല 🚫
