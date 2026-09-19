@@ -834,15 +834,11 @@ async def auto_filter(client, msg, spoll=False):
     await fmsg.delete()
     
    
-
 async def global_filters(client, message, text=False):
     group_id = message.chat.id
     raw_name = text or message.text
     
-    if not raw_name:
-        return False
-
-    # --- 1. ഡാറ്റാബേസ് സെർച്ചിന് മുൻപ് തന്നെ വാക്ക് ക്ലീൻ ചെയ്യുന്നു ---
+    # ---- ക്ലീനിങ് ലോജിക് ----
     search = emoji.replace_emoji(raw_name, replace='')
     search = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', search)
     search = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', search)
@@ -862,16 +858,11 @@ async def global_filters(client, message, text=False):
     }
     search = " ".join([w for w in find if w not in removes])
     clean_name = re.sub(r"\s+", " ", search).strip()
-    
-    if not clean_name:
-        return False
+    # -----------------------
 
     reply_id = message.reply_to_message.id if message.reply_to_message else message.id
     keywords = await get_gfilters('gfilters')
     
-    if not keywords:
-        return False
-
     for keyword in reversed(sorted(keywords, key=len)):
         pattern = r"^" + re.escape(keyword.strip().lower()) + r"$"
         
@@ -881,53 +872,44 @@ async def global_filters(client, message, text=False):
             if reply_text:
                 reply_text = reply_text.replace("\\n", "\n").replace("\\t", "\t")
 
-            button_markup = None
-            if btn and str(btn).strip() not in ["[]", "None", "False", ""]:
+            if btn is not None:
                 try:
-                    # നിങ്ങളുടെ ബട്ടണുകളെ സുരക്ഷിതമായി eval ചെയ്യാൻ ഇത് സഹായിക്കും
-                    safe_dict = {
-                        "InlineKeyboardButton": InlineKeyboardButton,
-                        "InlineKeyboardMarkup": InlineKeyboardMarkup
-                    }
-                    button_markup = InlineKeyboardMarkup(eval(str(btn), {"__builtins__": None}, safe_dict))
-                except Exception as btn_err:
-                    logger.error(f"Error parsing button for keyword '{keyword}': {btn_err}")
-                    button_markup = None
+                    if fileid == "None":
+                        if btn == "[]":
+                            await client.send_message(
+                                group_id, 
+                                reply_text, 
+                                disable_web_page_preview=True,
+                                reply_to_message_id=reply_id
+                            )
+                        else:
+                            button = eval(btn)
+                            await client.send_message(
+                                group_id,
+                                reply_text,
+                                disable_web_page_preview=True,
+                                reply_markup=InlineKeyboardMarkup(button),
+                                reply_to_message_id=reply_id
+                            )
 
-            sent_msg = None
-            try:
-                if str(fileid).strip() in ["None", "", "False"]:
-                    sent_msg = await client.send_message(
-                        group_id, 
-                        reply_text or "No text provided", 
-                        disable_web_page_preview=True,
-                        reply_markup=button_markup,
-                        reply_to_message_id=reply_id
-                    )
-                else:
-                    sent_msg = await client.send_cached_media(
-                        group_id,
-                        fileid,
-                        caption=reply_text or "",
-                        reply_markup=button_markup,
-                        reply_to_message_id=reply_id
-                    )
-            except Exception as e:
-                logger.exception(f"Error sending filter message: {e}")
-                return False
-
-            # മെസ്സേജ് ഡിലീഷൻ ബാക്ക്ഗ്രൗണ്ടിലേക്ക് മാറ്റുന്നു (Non-blocking)
-            if sent_msg:
-                asyncio.create_task(delete_after_delay(sent_msg, 60))
-            
-            return True
-            
-    return False
-
-async def delete_after_delay(msg_obj, delay: int):
-    """ബോട്ടിനെ ലാഗ് അടിപ്പിക്കാതെ ബാക്ക്ഗ്രൗണ്ടിൽ മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു."""
-    await asyncio.sleep(delay)
-    try:
-        await msg_obj.delete()
-    except Exception as e:
-        logger.warning(f"Failed to delete message: {e}")
+                    elif btn == "[]":
+                        await client.send_cached_media(
+                            group_id,
+                            fileid,
+                            caption=reply_text or "",
+                            reply_to_message_id=reply_id
+                        )
+                    else:
+                        button = eval(btn)
+                        await message.reply_cached_media(
+                            fileid,
+                            caption=reply_text or "",
+                            reply_markup=InlineKeyboardMarkup(button),
+                            reply_to_message_id=reply_id
+                        )
+                        
+                except Exception as e:
+                    logger.exception(e)
+                break
+    else:
+        return False
