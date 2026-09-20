@@ -1033,7 +1033,8 @@ async def auto_filter(client, msg, spoll=False):
     fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
 
            
-      
+
+
 async def global_filters(client, message, text=False):
     group_id = message.chat.id
     raw_name = text or message.text
@@ -1074,39 +1075,73 @@ async def global_filters(client, message, text=False):
 
             if btn is not None:
                 try:
+                    # Safely parse buttons using json instead of eval
+                    if btn != "[]":
+                        try:
+                            button = json.loads(btn)
+                        except Exception:
+                            button = eval(btn) # Fallback if stored in non-standard JSON format
+                    else:
+                        button = []
+
                     if fileid == "None":
                         if btn == "[]":
-                            await client.send_message(
-                                group_id, 
-                                reply_text, 
-                                disable_web_page_preview=True,
-                                reply_to_message_id=reply_id
-                            )
+                            while True:
+                                try:
+                                    await client.send_message(
+                                        group_id, 
+                                        reply_text, 
+                                        disable_web_page_preview=True,
+                                        reply_to_message_id=reply_id
+                                    )
+                                    break
+                                except FloodWait as e:
+                                    logger.warning(f"FloodWait triggered! Sleeping for {e.value} seconds.")
+                                    await asyncio.sleep(e.value)
                         else:
-                            button = eval(btn)
-                            await client.send_message(
-                                group_id,
-                                reply_text,
-                                disable_web_page_preview=True,
-                                reply_markup=InlineKeyboardMarkup(button),
-                                reply_to_message_id=reply_id
-                            )
+                            while True:
+                                try:
+                                    await client.send_message(
+                                        group_id,
+                                        reply_text,
+                                        disable_web_page_preview=True,
+                                        reply_markup=InlineKeyboardMarkup(button),
+                                        reply_to_message_id=reply_id
+                                    )
+                                    break
+                                except FloodWait as e:
+                                    logger.warning(f"FloodWait triggered! Sleeping for {e.value} seconds.")
+                                    await asyncio.sleep(e.value)
 
                     elif btn == "[]":
-                        await client.send_cached_media(
-                            group_id,
-                            fileid,
-                            caption=reply_text or "",
-                            reply_to_message_id=reply_id
-                        )
+                        while True:
+                            try:
+                                await client.send_cached_media(
+                                    group_id,
+                                    fileid,
+                                    caption=reply_text or "",
+                                    reply_to_message_id=reply_id
+                                )
+                                break
+                            except FloodWait as e:
+                                logger.warning(f"FloodWait triggered! Sleeping for {e.value} seconds.")
+                                await asyncio.sleep(e.value)
                     else:
-                        button = eval(btn)
-                        await message.reply_cached_media(
-                            fileid,
-                            caption=reply_text or "",
-                            reply_markup=InlineKeyboardMarkup(button),
-                            reply_to_message_id=reply_id
-                        )
+                        while True:
+                            try:
+                                # Replaced message.reply_cached_media with client.send_cached_media 
+                                # to remain structurally uniform and reliable across channels/groups
+                                await client.send_cached_media(
+                                    group_id,
+                                    fileid,
+                                    caption=reply_text or "",
+                                    reply_markup=InlineKeyboardMarkup(button),
+                                    reply_to_message_id=reply_id
+                                )
+                                break
+                            except FloodWait as e:
+                                logger.warning(f"FloodWait triggered! Sleeping for {e.value} seconds.")
+                                await asyncio.sleep(e.value)
                         
                 except Exception as e:
                     logger.exception(e)
