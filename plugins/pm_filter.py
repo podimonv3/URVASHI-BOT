@@ -541,11 +541,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             if not unique_files:
                 return await query.answer(f"❌ {filter_tag.upper()} ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
                 
-            # NoneType Chat ID എറർ വരാതിരിക്കാനുള്ള സുരക്ഷിതമായ ചെക്കിംഗ്
-            if query.message and query.message.chat:
-                chat_id = query.message.chat.id
-            else:
-                chat_id = query.from_user.id
+            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
                 
             settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
@@ -755,7 +751,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             alerts = ast.literal_eval(alerts)
             alert = alerts[int(i)]
             alert = alert.replace("\\n", "\n").replace("\\t", "\t")
-            await query.answer(alert, show_alert=True)
+            await query.answer(alert, show_alert=True) 
             
     if query.data.startswith("file"):
         ident, file_id = query.data.split("#")
@@ -766,7 +762,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
         title = files.file_name
         size = get_size(files.file_size)
         f_caption = files.file_name
-        settings = await get_settings(query.message.chat.id)
+        
+        # ⬇️ എറർ വരാതിരിക്കാൻ ഈ 2 വരികൾ പകരം ചേർക്കുക ⬇️
+        chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
+        settings = await get_settings(chat_id)
         if CUSTOM_FILE_CAPTION:
             try:
                 f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption, mention=query.from_user.mention)
