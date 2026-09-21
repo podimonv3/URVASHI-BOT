@@ -448,8 +448,11 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # 6. HOME BUTTON (NoneType CHAT ID BUG FIXED)
         elif action == "home":
             files, offset, total_results = await get_search_results(search_query.lower(), offset=0, filter=True)
-            chat_id = query.message.chat.id if query.message else query.from_user.id
+            
+            # ⬇️ ഇവിടെയാണ് സുരക്ഷിതമായ ചെക്കിംഗ് ആഡ് ചെയ്തത് ⬇️
+            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
             settings = await get_settings(chat_id)
+            
             pre = 'filep' if settings['file_secure'] else 'file'
             btn = get_filter_menu_buttons(req_user, key)
             for file in files[:10]:
