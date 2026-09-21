@@ -60,6 +60,7 @@ def convert_time_to_seconds(time_str):
         return 0
         
 async def send_file(client, query, ident, file_id):
+    from pyrogram.errors import UserIsBlocked
     files_ = await get_file_details(file_id)
     if not files_:
         return
@@ -74,15 +75,21 @@ async def send_file(client, query, ident, file_id):
             logger.exception(e)
             f_caption = f_caption
     if f_caption is None:
-        f_caption = f"{title}" # മുൻപ് ഉണ്ടായിരുന്ന ഫയൽ നെയിം സ്പെല്ലിംഗ് പിശക് (f_cation) ഇവിടെ തിരുത്തിയിട്ടുണ്ട്
+        f_caption = f"{title}"
 
-    # ബട്ടണുകൾ ഇല്ലാതെ ഫയൽ അയക്കുന്നു
-    ok = await client.send_cached_media(
-        chat_id=query.from_user.id,
-        file_id=file_id,
-        caption=f_caption,
-        protect_content=True if ident == 'checksubp' else False
-    )
+    # 🛠️ ഫിക്സ്: യൂസർ ബ്ലോക്ക് ചെയ്തിട്ടുണ്ടെങ്കിൽ എറർ അടിക്കാതിരിക്കാൻ try-except ചേർത്തു
+    try:
+        ok = await client.send_cached_media(
+            chat_id=query.from_user.id,
+            file_id=file_id,
+            caption=f_caption,
+            protect_content=True if ident == 'checksubp' else False
+        )
+    except UserIsBlocked:
+        logger.warning(f"യൂസർ ({query.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫയൽ അയക്കാൻ കഴിഞ്ഞില്ല.")
+    except Exception as e:
+        logger.error(f"ഫയൽ അയക്കുന്നതിൽ പരാജയപ്പെട്ടു: {e}")
+
     
    
 @Client.on_message(filters.command("start") & filters.incoming)
@@ -226,8 +233,16 @@ async def start(client, message):
     except:
         file_id = data
         pre = ""
+        
+    from pyrogram.errors import UserIsBlocked
+    
     if data.split("-", 1)[0] == "BATCH":
-        sts = await message.reply("Please wait")
+        try:
+            sts = await message.reply("Please wait")
+        except UserIsBlocked:
+            logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് പ്രോസസ്സ് തുടങ്ങാൻ കഴിഞ്ഞില്ല.")
+            return
+            
         file_id = data.split("-", 1)[1]
         msgs = BATCH_FILES.get(file_id)
         if not msgs:
@@ -236,10 +251,12 @@ async def start(client, message):
                 with open(file) as file_data:
                     msgs=json.loads(file_data.read())
             except:
-                await sts.edit("FAILED")
+                try: await sts.edit("FAILED")
+                except: pass
                 return await client.send_message(LOG_CHANNEL, "UNABLE TO OPEN FILE.")
             os.remove(file)
             BATCH_FILES[file_id] = msgs
+            
         for msg in msgs:
             title = msg.get("title")
             size=get_size(int(msg.get("size", 0)))
@@ -262,20 +279,36 @@ async def start(client, message):
             except FloodWait as e:
                 await asyncio.sleep(e.x)
                 logger.warning(f"Floodwait of {e.x} sec.")
-                await client.send_cached_media(
-                    chat_id=message.from_user.id,
-                    file_id=msg.get("file_id"),
-                    caption=f_caption,
-                    protect_content=msg.get('protect', False),
-                    )
+                try:
+                    await client.send_cached_media(
+                        chat_id=message.from_user.id,
+                        file_id=msg.get("file_id"),
+                        caption=f_caption,
+                        protect_content=msg.get('protect', False),
+                        )
+                except UserIsBlocked:
+                    logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫ്ലഡ്‌വൈറ്റിന് ശേഷം ബാച്ച് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
+                    break
+                except Exception: continue
+            except UserIsBlocked:
+                logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
+                break # യൂസർ ബ്ലോക്ക് ചെയ്തതുകൊണ്ട് ബാക്കി ഫയലുകൾ അയക്കുന്നത് ഇവിടെ നിർത്തുന്നു
             except Exception as e:
                 logger.warning(e, exc_info=True)
                 continue
             await asyncio.sleep(1) 
-        await sts.delete()
+            
+        try: await sts.delete()
+        except: pass
         return
+        
     elif data.split("-", 1)[0] == "DSTORE":
-        sts = await message.reply("Please wait")
+        try:
+            sts = await message.reply("Please wait")
+        except UserIsBlocked:
+            logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. DSTORE പ്രോസസ്സ് തുടങ്ങാൻ കഴിഞ്ഞില്ല.")
+            return
+            
         b_string = data.split("-", 1)[1]
         decoded = (base64.urlsafe_b64decode(b_string + "=" * (-len(b_string) % 4))).decode("ascii")
         try:
@@ -302,6 +335,9 @@ async def start(client, message):
                 except FloodWait as e:
                     await asyncio.sleep(e.x)
                     await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                except UserIsBlocked:
+                    logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് ഫയൽ കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
+                    break
                 except Exception as e:
                     logger.exception(e)
                     continue
@@ -313,13 +349,15 @@ async def start(client, message):
                 except FloodWait as e:
                     await asyncio.sleep(e.x)
                     await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
+                except UserIsBlocked:
+                    logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് മെസ്സേജ് കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
+                    break
                 except Exception as e:
                     logger.exception(e)
                     continue
             await asyncio.sleep(1) 
         return await sts.delete()
         
-
     files_ = await get_file_details(file_id)           
     if not files_:
         pre, file_id = ((base64.urlsafe_b64decode(data + "=" * (-len(data) % 4))).decode("ascii")).split("_", 1)
@@ -341,9 +379,13 @@ async def start(client, message):
                     return
             await msg.edit_caption(f_caption)
             return
-        except:
+        except UserIsBlocked:
+            logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. കാഷെഡ് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
+            return
+        except Exception:
             pass
         return await message.reply('No such file exist.')
+        
     files = files_[0]
     title = files.file_name
     size=get_size(files.file_size)
@@ -358,13 +400,19 @@ async def start(client, message):
     if f_caption is None:
         f_caption = f"{title}"
 
-    # ബട്ടണുകൾ പൂർണ്ണമായി ഒഴിവാക്കി ഫയൽ അയക്കുന്നു
-    xd = await client.send_cached_media(
-        chat_id=message.from_user.id,
-        file_id=file_id,
-        caption=f_caption,
-        protect_content=True if pre == 'filep' else False
-    )
+    # 🛠️ ഫിക്സ്: യൂസർ ബ്ലോക്ക് ചെയ്തിട്ടുണ്ടെങ്കിൽ തനിയെ സ്കിപ്പ് ചെയ്യാനുള്ള try-except ചേർത്തു
+    try:
+        xd = await client.send_cached_media(
+            chat_id=message.from_user.id,
+            file_id=file_id,
+            caption=f_caption,
+            protect_content=True if pre == 'filep' else False
+        )
+    except UserIsBlocked:
+        logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫയൽ അയക്കാൻ കഴിഞ്ഞില്ല.")
+    except Exception as e:
+        logger.error(f"മെസ്സേജ് അയക്കുന്നതിൽ പരാജയപ്പെട്ടു: {e}")
+
 
     
     
