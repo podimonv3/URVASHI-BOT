@@ -468,11 +468,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 7. FILTER SUB-BUTTON CLICKED (NoneType CHAT ID BUG FIXED)
+        # 7. FILTER SUB-BUTTON CLICKED (NoneType CHAT ID & LIST MATCH BUG FIXED)
         elif action == "filter":
-            filter_tag = parts
+            # parts-ൽ നിന്നും ഫിൽട്ടർ ടാഗ് കൃത്യമായി വേർതിരിച്ചെടുക്കുന്നു
+            filter_tag = parts[4].lower() if len(parts) > 4 else ""
             files = []
             total_results = 0
+            
+            if not filter_tag:
+                return await query.answer("❌ തെറ്റായ ഫിൽട്ടർ ടാഗ്!", show_alert=True)
             
             if re.match(r'^e\d{2}$', filter_tag):
                 ep_num = int(filter_tag[1:])
@@ -534,7 +538,12 @@ async def cb_handler(client: Client, query: CallbackQuery):
             if not unique_files:
                 return await query.answer(f"❌ {filter_tag.upper()} ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
                 
-            chat_id = query.message.chat.id if query.message else query.from_user.id
+            # NoneType Chat ID എറർ വരാതിരിക്കാനുള്ള സുരക്ഷിതമായ ചെക്കിംഗ്
+            if query.message and query.message.chat:
+                chat_id = query.message.chat.id
+            else:
+                chat_id = query.from_user.id
+                
             settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
             
@@ -551,6 +560,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
             except Exception: pass
             return await query.answer()
+
             
         # 8. SEND ALL BUTTON CLICKED (DUMMY VERSION)
         elif action == "sendall":
