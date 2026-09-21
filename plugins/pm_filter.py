@@ -445,17 +445,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 6. HOME BUTTON (FLOOD FIXED)
+        # 6. HOME BUTTON (NoneType CHAT ID BUG FIXED)
         elif action == "home":
             files, offset, total_results = await get_search_results(search_query.lower(), offset=0, filter=True)
-            settings = await get_settings(query.message.chat.id)
+            chat_id = query.message.chat.id if query.message else query.from_user.id
+            settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
             btn = get_filter_menu_buttons(req_user, key)
             for file in files[:10]:
                 btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
             if total_results > 10:
                 btn.append([
-                    InlineKeyboardButton(text=f"𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
+                    InlineKeyboardButton(text=f"   𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
                     InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
                 ])
             cap = f"<b><i>Here is What I Found In My Database For Your Query :{search_query}</i></b>"
@@ -467,10 +468,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-
-        # 7. FILTER SUB-BUTTON CLICKED (SIMPLE & SMART METHOD & FLOOD FIXED)
+        # 7. FILTER SUB-BUTTON CLICKED (NoneType CHAT ID BUG FIXED)
         elif action == "filter":
-            filter_tag = parts[4]
+            filter_tag = parts
             files = []
             total_results = 0
             
@@ -534,7 +534,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
             if not unique_files:
                 return await query.answer(f"❌ {filter_tag.upper()} ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
                 
-            settings = await get_settings(query.message.chat.id)
+            chat_id = query.message.chat.id if query.message else query.from_user.id
+            settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
             
             btn = get_filter_menu_buttons(req_user, key)
@@ -546,19 +547,15 @@ async def cb_handler(client: Client, query: CallbackQuery):
             try:
                 await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
             except FloodWait as e:
-                # ഒരുപാട് യൂസർമാർ ഒരുമിച്ച് ഉപയോഗിക്കുമ്പോൾ വരുന്ന റേറ്റ് ലിമിറ്റ് ഇവിടെ തടയുന്നു
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
             return await query.answer()
-
             
         # 8. SEND ALL BUTTON CLICKED (DUMMY VERSION)
         elif action == "sendall":
             await query.answer("⏳ ᴄᴏᴍɪɴɢ sᴏᴏɴ...", show_alert=True)
-            return           
-
-    # ഇതിന് താഴെ നിങ്ങളുടെ പഴയ കോഡിലുള്ള ബാക്കി callback handlers വരും
+            return
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "delallconfirm":
