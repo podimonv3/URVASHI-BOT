@@ -345,14 +345,16 @@ async def next_page(bot, query):
         return
         
     await query.answer()
-
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
+    # =====================================================================
+    # ADVANCED INLINE MENUS HANDLERS (ALL LIST ERRORS FULLY FIXED)
+    # =====================================================================
     if query.data.startswith("flm_"):
         parts = query.data.split("_")
-        action = parts
-        req_user = int(parts)
-        key = parts
+        action = parts[1]         # 💡 FIXED: Index 1 for action string
+        req_user = int(parts[2])  # 💡 FIXED: Index 2 for user ID integer
+        key = parts[3]            # 💡 FIXED: Index 3 for message unique key
         
         if req_user not in [query.from_user.id, 0]:
             return await query.answer("ഇത് നിങ്ങളുടെ സെർച്ച് റിസൾട്ട് അല്ല!", show_alert=True)
@@ -365,6 +367,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if action == "qualmenu":
             buttons_list = []
             for q in QUALITIES:
+                # 💡 FIXED: callback_data modified to pass single filter action cleanly
                 buttons_list.append(InlineKeyboardButton(q, callback_data=f"flm_filter_{req_user}_{key}_{q.split()[-1].lower()}"))
             grid = chunk_list(buttons_list, 2)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
@@ -391,7 +394,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 3. YEARS MENU (1990 to 2026)
+        # 3. YEARS MENU
         elif action == "yearmenu":
             buttons_list = []
             for year in range(1990, 2027):
@@ -425,8 +428,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
         elif action == "home":
             db_search = search_query
             if " [" in search_query:
-                base = search_query.split(" [")
-                tags = search_query.split(" [").replace("]", "").split(" + ")
+                base = search_query.split(" [")[0]
+                tags = search_query.split(" [")[1].replace("]", "").split(" + ")
                 db_search = f"{base} {' '.join(tags)}"
 
             files, offset, total_results = await get_search_results(db_search.lower(), offset=0, filter=True)
@@ -453,7 +456,128 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
-            return await query.answer()       
+            return await query.answer()
+            
+        # 6. MULTI-FILTER SUB-BUTTON CLICKED (FIXED INDEX ENGINE)
+        elif action == "filter":
+            filter_tag = parts[4].lower() if len(parts) > 4 else ""  # 💡 FIXED: Index 4 for target filter word
+            if not filter_tag:
+                return await query.answer("❌ തെറ്റായ ഫിൽട്ടർ ടാഗ്!", show_alert=True)
+            
+            current_search = BUTTONS.get(key, "")
+            
+            if " [" in current_search:
+                base_query = current_search.split(" [")[0]
+                existing_tags = current_search.split(" [")[1].replace("]", "").split(" + ")
+                
+                if filter_tag not in existing_tags:
+                    existing_tags.append(filter_tag)
+                
+                new_search_entry = f"{base_query} [{" + ".join(existing_tags)}]"
+                db_search_query = f"{base_query} {" ".join(existing_tags)}"
+            else:
+                new_search_entry = f"{current_search} [{filter_tag}]"
+                db_search_query = f"{current_search} {filter_tag}"
+            
+            BUTTONS[key] = new_search_entry
+            files = []
+            total_results = 0
+            
+            # സീസൺ വേരിയന്റുകൾ പരിശോധിക്കുന്നു (eg: season 1, s01)
+            if re.match(r'^s\d{2}$', filter_tag):
+                s_num = int(filter_tag[1:])
+                search_variants = [
+                    db_search_query,
+                    f"{db_search_query.replace(filter_tag, '')} season {s_num}",
+                    f"{db_search_query.replace(filter_tag, '')} season {s_num:02d}"
+                ]
+                for variant in search_variants:
+                    res_files, _, res_total = await get_search_results(variant.lower(), offset=0, filter=True)
+                    if res_files:
+                        files.extend(res_files)
+                        total_results += res_total
+                        break
+                        
+            # ലാംഗ്വേജ് വേരിയന്റുകൾ പരിശോധിക്കുന്നു
+            else:
+                lang_variants = {
+                    "malayalam": ["malayalam", "mal"],
+                    "tamil": ["tamil", "tam"],
+                    "english": ["english", "eng"],
+                    "hindi": ["hindi", "hin"],
+                    "telugu": ["telugu", "tel"],
+                    "kannada": ["kannada", "kan"]
+                }
+                
+                if filter_tag in lang_variants:
+                    for variant in lang_variants[filter_tag]:
+                        v_search = db_search_query.replace(filter_tag, variant)
+                        res_files, _, res_total = await get_search_results(v_search.lower(), offset=0, filter=True)
+                        if res_files:
+                            files.extend(res_files)
+                            total_results += res_total
+                            break
+                else:
+                    res_files, _, res_total = await get_search_results(db_search_query.lower(), offset=0, filter=True)
+                    if res_files:
+                        files.extend(res_files)
+                        total_results += res_total
+
+            seen_ids = set()
+            unique_files = []
+            for f in files:
+                if f.file_id not in seen_ids:
+                    seen_ids.add(f.file_id)
+                    unique_files.append(f)
+
+            if not unique_files:
+                BUTTONS[key] = current_search
+                return await query.answer(f"❌ ഈ കോമ്പിനേഷനിൽ ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
+                
+            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
+            settings = await get_settings(chat_id)
+            pre = 'filep' if settings['file_secure'] else 'file'
+            
+            btn = get_filter_menu_buttons(req_user, key)
+            for file in unique_files[:10]:
+                btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
+            
+            btn.append([InlineKeyboardButton("🔄 RESET FILTERS", callback_data=f"flm_reset_{req_user}_{key}")])
+            
+            cap = f"<b><i>Filtered Results for: {new_search_entry.upper()}</i></b>"
+            try:
+                await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
+            except FloodWait as e:
+                await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
+                return
+            except Exception: pass
+            return await query.answer()
+
+        # 7. RESET BUTTON CLICKED
+        elif action == "reset":
+            current_search = BUTTONS.get(key, "")
+            if " [" in current_search:
+                current_search = current_search.split(" [")[0]
+                BUTTONS[key] = current_search
+                
+            files, offset, total_results = await get_search_results(current_search.lower(), offset=0, filter=True)
+            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
+            settings = await get_settings(chat_id)
+            
+            pre = 'filep' if settings['file_secure'] else 'file'
+            btn = get_filter_menu_buttons(req_user, key)
+            for file in files[:10]:
+                btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
+            
+            if total_results > 10:
+                btn.append([
+                    InlineKeyboardButton(text=f"𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
+                    InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
+                ])
+                
+            cap = f"<b><i>Here is What I Found In My Database For Your Query: {current_search}</i></b>"
+            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
+            return await query.answer("Filters Cleared! 🔄", show_alert=True)    
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "delallconfirm":
