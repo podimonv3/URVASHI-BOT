@@ -291,101 +291,110 @@ async def next_page(bot, query):
         await query.answer("You are using one of my old messages, please send the request again.", show_alert=True)
         return
 
-    # 🛠️ ANY-ORDER MULTI-FILTER PAGINATION ENGINE
+    files = []
     base_movie_query = search
     existing_tags = []
     
-    if " [" in search:
+    # 🛠️ ഫിക്സ്: ബ്രാക്കറ്റ് ചിഹ്നവും സ്പേസും കൃത്യമായി ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി ഫിൽട്ടർ ആയി കണക്കാക്കുന്നു
+    if " [" in search and search.endswith("]"):
         base_movie_query = search.split(" [")[0].strip()
         existing_tags = search.split(" [")[1].replace("]", "").split(" + ")
 
-    # ടാഗുകളെ തരംതിരിക്കാനുള്ള വേരിയബിളുകൾ
-    target_lang = ""
-    target_quality = ""
-    target_year = ""
-    target_season = ""
-    
-    lang_variants = {
-        "malayalam": "malayalam", "tamil": "tamil", "english": "english", 
-        "hindi": "hindi", "telugu": "telugu", "kannada": "kannada",
-        "dual": "dual", "multi": "multi"
-    }
-    
-    # നെക്സ്റ്റ് പേജിലും ടാഗുകളെ അവയുടെ ടൈപ്പ് അനുസരിച്ച് തരംതിരിക്കുന്നു (Order-Independent)
-    for tag in existing_tags:
-        tag_lower = tag.lower()
-        if tag_lower in lang_variants:
-            target_lang = tag_lower
-        elif tag_lower in ["360p", "480p", "720p", "1080p", "1440p", "2160p"]:
-            target_quality = tag_lower
-        elif re.match(r'^\d{4}$', tag_lower):
-            target_year = tag_lower
-        elif re.match(r'^s\d{2}$', tag_lower):
-            target_season = tag_lower
-
-    files = []
-    db_queries = [base_movie_query]
-    
-    # 🔍 ബാക്ക്ഗ്രൗണ്ടിൽ ഫയലുകൾ പരമാവധി കണ്ടെത്താനുള്ള ക്വറി ബിൽഡർ
-    if target_year:
-        db_queries = [f"{base_movie_query} {target_year}"]
-    
-    if target_season:
-        s_num = int(target_season[1:])
-        extended_queries = []
-        for q in db_queries:
-            extended_queries.extend([
-                f"{q} s{s_num:02d}", f"{q} s{s_num}", 
-                f"{q} season {s_num}", f"{q} season{s_num}"
-            ])
-        db_queries = extended_queries
-
-    if target_lang:
-        extended_queries = []
-        lang_lists = [target_lang]
-        if target_lang == "malayalam": lang_lists.append("mal")
-        elif target_lang == "tamil": lang_lists.append("tam")
-        elif target_lang == "english": lang_lists.append("eng")
-        elif target_lang == "hindi": lang_lists.append("hin")
-        elif target_lang == "telugu": lang_lists.append("tel")
-        elif target_lang == "kannada": lang_lists.append("kan")
-        elif target_lang == "dual": lang_lists.extend(["dual audio", "hindi english"])
+    # ടാഗുകൾ ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി-ഫിൽട്ടർ ലോജിക് വർക്ക് ചെയ്യിക്കുന്നു
+    if existing_tags:
+        target_lang = ""
+        target_quality = ""
+        target_year = ""
+        target_season = ""
         
-        for q in db_queries:
-            for lang in lang_lists:
-                extended_queries.append(f"{q} {lang}")
-        db_queries = extended_queries
-
-    if target_quality:
-        extended_queries = []
-        qual_lists = [target_quality]
-        if target_quality == "1080p": qual_lists.extend(["1080", "fhd", "full hd"])
-        elif target_quality == "720p": qual_lists.extend(["720", "hd"])
-        elif target_quality == "2160p": qual_lists.extend(["2160", "4k", "uhd"])
+        lang_variants = {
+            "malayalam": "malayalam", "tamil": "tamil", "english": "english", 
+            "hindi": "hindi", "telugu": "telugu", "kannada": "kannada",
+            "dual": "dual", "multi": "multi"
+        }
         
-        for q in db_queries:
-            for qual in qual_lists:
-                extended_queries.append(f"{q} {qual}")
-        db_queries = extended_queries
+        for tag in existing_tags:
+            tag_lower = tag.lower()
+            if tag_lower in lang_variants:
+                target_lang = tag_lower
+            elif tag_lower in ["360p", "480p", "720p", "1080p", "1440p", "2160p"]:
+                target_quality = tag_lower
+            elif re.match(r'^\d{4}$', tag_lower):
+                target_year = tag_lower
+            elif re.match(r'^s\d{2}$', tag_lower):
+                target_season = tag_lower
 
-    # എല്ലാ കോമ്പിനേഷനുകളും ഒന്നിച്ച് ഡാറ്റാബേസിൽ തിരയുന്നു
-    for final_query in db_queries:
-        res_files, _, _ = await get_search_results(final_query.lower(), offset=0, filter=True)
+        db_queries = [base_movie_query]
+        
+        if target_year:
+            db_queries = [f"{base_movie_query} {target_year}"]
+        
+        if target_season:
+            s_num = int(target_season[1:])
+            extended_queries = []
+            for q in db_queries:
+                extended_queries.extend([
+                    f"{q} s{s_num:02d}", f"{q} s{s_num}", 
+                    f"{q} season {s_num}", f"{q} season{s_num}"
+                ])
+            db_queries = extended_queries
+
+        if target_lang:
+            extended_queries = []
+            lang_lists = [target_lang]
+            if target_lang == "malayalam": lang_lists.append("mal")
+            elif target_lang == "tamil": lang_lists.append("tam")
+            elif target_lang == "english": lang_lists.append("eng")
+            elif target_lang == "hindi": lang_lists.append("hin")
+            elif target_lang == "telugu": lang_lists.append("tel")
+            elif target_lang == "kannada": lang_lists.append("kan")
+            elif target_lang == "dual": lang_lists.extend(["dual audio", "hindi english"])
+            
+            for q in db_queries:
+                for lang in lang_lists:
+                    extended_queries.append(f"{q} {lang}")
+            db_queries = extended_queries
+
+        if target_quality:
+            extended_queries = []
+            qual_lists = [target_quality]
+            if target_quality == "1080p": qual_lists.extend(["1080", "fhd", "full hd"])
+            elif target_quality == "720p": qual_lists.extend(["720", "hd"])
+            elif target_quality == "2160p": qual_lists.extend(["2160", "4k", "uhd"])
+            
+            for q in db_queries:
+                for qual in qual_lists:
+                    extended_queries.append(f"{q} {qual}")
+            db_queries = extended_queries
+
+        for final_query in db_queries:
+            res_files, _, _ = await get_search_results(final_query.lower(), offset=0, filter=True)
+            if res_files:
+                files.extend(res_files)
+                
+        # ഡ്യൂപ്ലിക്കേറ്റ് ഒഴിവാക്കൽ
+        seen_ids = set()
+        unique_files = []
+        for f in files:
+            if f.file_id not in seen_ids:
+                seen_ids.add(f.file_id)
+                unique_files.append(f)
+        total = len(unique_files)
+        page_files = unique_files[offset:offset + 10]
+    else:
+        # 💡 FIX: സാധാരണ നോർമൽ സെർച്ചിൽ ചാനലിലെ മുഴുവൻ പേജുകളും കിട്ടാൻ വേണ്ടി offset ഒഴിവാക്കി ഒന്നിച്ച് റിസൾട്ട് എടുക്കുന്നു
+        res_files, _, _ = await get_search_results(base_movie_query.lower(), offset=0, filter=True)
         if res_files:
             files.extend(res_files)
-
-    # ഡ്യൂപ്ലിക്കേറ്റ് ഫയലുകൾ ഒഴിവാക്കുന്നു
-    seen_ids = set()
-    unique_files = []
-    for f in files:
-        if f.file_id not in seen_ids:
-            seen_ids.add(f.file_id)
-            unique_files.append(f)
-
-    total = len(unique_files)
-    
-    # കറന്റ് പേജിലേക്ക് ആവശ്യമായ അടുത്ത 10 ഫയലുകൾ മുറിച്ചെടുക്കുന്നു (Slicing)
-    page_files = unique_files[offset:offset + 10]
+        
+        seen_ids = set()
+        unique_files = []
+        for f in files:
+            if f.file_id not in seen_ids:
+                seen_ids.add(f.file_id)
+                unique_files.append(f)
+        total = len(unique_files)
+        page_files = unique_files[offset:offset + 10]
 
     if not page_files:
         await query.answer("No more files found", show_alert=True)
@@ -398,7 +407,6 @@ async def next_page(bot, query):
     for file in page_files:
         btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
 
-    # അടുത്ത പേജുകൾ ഉണ്ടോ എന്ന് നോക്കുന്നു
     if total > (offset + 10):
         n_offset = offset + 10
     else:
@@ -409,7 +417,6 @@ async def next_page(bot, query):
     else:
         off_set = None
 
-    # Pagination ബട്ടണുകൾ അടിയിൽ ചേർക്കുന്നു (യൂസർ ഐഡിയും മെസ്സേജ് കീയും നിലനിർത്തിക്കൊണ്ട്)
     if n_offset == '':
         btn.append([
             InlineKeyboardButton("Bᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
@@ -436,7 +443,7 @@ async def next_page(bot, query):
         return
         
     await query.answer()
-
+      
         
 
 @Client.on_callback_query()
