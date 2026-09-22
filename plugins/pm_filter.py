@@ -295,29 +295,28 @@ async def next_page(bot, query):
     base_movie_query = search
     existing_tags = []
     
-    # 🛠️ ഫിക്സ്: ബ്രാക്കറ്റ് ചിഹ്നവും സ്പേസും കൃത്യമായി ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി ഫിൽട്ടർ ആയി കണക്കാക്കുന്നു
+    # 🛠️ MULTI-FILTER DETECTOR: ബ്രാക്കറ്റ് ചിഹ്നവും സ്പേസും ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി ഫിൽട്ടർ ആയി കണക്കാക്കുന്നു
     if " [" in search and search.endswith("]"):
         base_movie_query = search.split(" [")[0].strip()
         existing_tags = search.split(" [")[1].replace("]", "").split(" + ")
 
-    # ടാഗുകൾ ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി-ഫിൽട്ടർ ലോജിക് വർക്ക് ചെയ്യിക്കുന്നു
+    # കാറ്റഗറി ലിസ്റ്റുകൾ
+    all_languages = ["malayalam", "tamil", "english", "hindi", "telugu", "kannada", "dual", "multi"]
+    all_qualities = ["360p", "480p", "720p", "1080p", "1440p", "2160p"]
+
+    # 1. ടാഗുകൾ നിലവിലുണ്ടെങ്കിൽ ഏത് ഓർഡറിലും പേജിനേഷൻ വർക്ക് ചെയ്യിക്കാനുള്ള ലോജിക്
     if existing_tags:
         target_lang = ""
         target_quality = ""
         target_year = ""
         target_season = ""
         
-        lang_variants = {
-            "malayalam": "malayalam", "tamil": "tamil", "english": "english", 
-            "hindi": "hindi", "telugu": "telugu", "kannada": "kannada",
-            "dual": "dual", "multi": "multi"
-        }
-        
+        # നെക്സ്റ്റ് പേജിലും ടാഗുകളെ അവയുടെ ടൈപ്പ് അനുസരിച്ച് തരംതിരിക്കുന്നു (Order-Independent)
         for tag in existing_tags:
             tag_lower = tag.lower()
-            if tag_lower in lang_variants:
+            if tag_lower in all_languages:
                 target_lang = tag_lower
-            elif tag_lower in ["360p", "480p", "720p", "1080p", "1440p", "2160p"]:
+            elif tag_lower in all_qualities:
                 target_quality = tag_lower
             elif re.match(r'^\d{4}$', tag_lower):
                 target_year = tag_lower
@@ -329,13 +328,17 @@ async def next_page(bot, query):
         if target_year:
             db_queries = [f"{base_movie_query} {target_year}"]
         
+        # ⚙️ SEASONS MAXIMUM RESULT LOGIC FOR NEXT PAGE (EPISODES COMPATIBLE)
         if target_season:
             s_num = int(target_season[1:])
             extended_queries = []
             for q in db_queries:
                 extended_queries.extend([
-                    f"{q} s{s_num:02d}", f"{q} s{s_num}", 
-                    f"{q} season {s_num}", f"{q} season{s_num}"
+                    f"{q} s{s_num:02d}",        # eg: Bigil s01
+                    f"{q} s{s_num:02d}e",       # eg: Bigil s01e (S01E01, S01E02 ഫയലുകൾ പിടിക്കാൻ)
+                    f"{q} s{s_num}",            # eg: Bigil s1
+                    f"{q} season {s_num}",      # eg: Bigil season 1
+                    f"{q} season{s_num}"        # eg: Bigil season1
                 ])
             db_queries = extended_queries
 
@@ -367,6 +370,7 @@ async def next_page(bot, query):
                     extended_queries.append(f"{q} {qual}")
             db_queries = extended_queries
 
+        # എല്ലാ കോമ്പിനേഷനുകളും ഒന്നിച്ച് ഡാറ്റാബേസിൽ തിരയുന്നു
         for final_query in db_queries:
             res_files, _, _ = await get_search_results(final_query.lower(), offset=0, filter=True)
             if res_files:
@@ -381,8 +385,9 @@ async def next_page(bot, query):
                 unique_files.append(f)
         total = len(unique_files)
         page_files = unique_files[offset:offset + 10]
+    
+    # 2. നോർമൽ സെർച്ച് ലോജിക് (ബട്ടണുകൾ ഒന്നും ക്ലിക്ക് ചെയ്യാത്ത അവസ്ഥയിൽ)
     else:
-        # 💡 FIX: സാധാരണ നോർമൽ സെർച്ചിൽ ചാനലിലെ മുഴുവൻ പേജുകളും കിട്ടാൻ വേണ്ടി offset ഒഴിവാക്കി ഒന്നിച്ച് റിസൾട്ട് എടുക്കുന്നു
         res_files, _, _ = await get_search_results(base_movie_query.lower(), offset=0, filter=True)
         if res_files:
             files.extend(res_files)
@@ -442,9 +447,8 @@ async def next_page(bot, query):
         await query.answer(f"വളരെ വേഗത്തിലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
         return
         
-    await query.answer()
-      
-        
+    await query.answer()    
+               
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
@@ -584,7 +588,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
             return await query.answer()
 
             
-        # 6. MULTI-FILTER SUB-BUTTON CLICKED (ANY ORDER COMPATIBLE ENGINE)
+        # 6. MULTI-FILTER SUB-BUTTON CLICKED (FINAL OPTIMIZED ENGINE)
         elif action == "filter":
             filter_tag = parts[4].lower() if len(parts) > 4 else ""
             if not filter_tag:
@@ -592,70 +596,85 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
             current_search = BUTTONS.get(key, "")
             
-            # 1. 🧠 AI PARSING LOGIC: നിലവിലുള്ള ടാഗുകളെയും പുതിയ ടാഗിനെയും ഒരു സെറ്റിലേക്ക് (Set) മാറ്റുന്നു (Duplicates ഒഴിവാക്കാൻ)
+            # 1. AI REPLACEMENT LOGIC: നിലവിലുള്ള ടാഗുകളെയും പുതിയ ടാഗിനെയും വേർതിരിക്കുന്നു
             existing_tags = []
             base_movie_query = current_search
             
             if " [" in current_search:
                 base_movie_query = current_search.split(" [")[0].strip()
-                # ബ്രാക്കറ്റിനുള്ളിൽ കിടക്കുന്ന എല്ലാ ടാഗുകളെയും വേർതിരിച്ചെടുക്കുന്നു
                 existing_tags = current_search.split(" [")[1].replace("]", "").split(" + ")
             
-            # പുതിയ ടാഗ് ലിസ്റ്റിൽ ഇല്ലെങ്കിൽ മാത്രം ചേർക്കുന്നു
-            if filter_tag not in existing_tags:
-                existing_tags.append(filter_tag)
+            # കാറ്റഗറികൾ തിരിച്ചറിയാനുള്ള ലിസ്റ്റുകൾ
+            all_languages = ["malayalam", "tamil", "english", "hindi", "telugu", "kannada", "dual", "multi"]
+            all_qualities = ["360p", "480p", "720p", "1080p", "1440p", "2160p"]
             
-            # ഇന്റർഫേസിൽ കാണിക്കാൻ വേണ്ടി അതേ ഓർഡറിൽ സൂക്ഷിക്കുന്നു
-            new_search_entry = f"{base_movie_query} [{' + '.join(existing_tags)}]"
+            # 🛠️ പുതിയ ടാഗ് ഏത് ടൈപ്പ് ആണെന്ന് നോക്കി, ആ ടൈപ്പിൽ പെട്ട പഴയ ടാഗ് ഉണ്ടെങ്കിൽ അതിനെ നീക്കം ചെയ്യുന്നു (Replace)
+            updated_tags = []
+            for tag in existing_tags:
+                tag_lower = tag.lower()
+                # ലാംഗ്വേജ് ആണ് മാറ്റുന്നതെങ്കിൽ പഴയ ലാംഗ്വേജ് ഒഴിവാക്കുന്നു
+                if filter_tag in all_languages and tag_lower in all_languages:
+                    continue
+                # ക്വാളിറ്റി ആണ് മാറ്റുന്നതെങ്കിൽ പഴയ ക്വാളിറ്റി ഒഴിവാക്കുന്നു
+                elif filter_tag in all_qualities and tag_lower in all_qualities:
+                    continue
+                # വർഷം ആണ് മാറ്റുന്നതെങ്കിൽ പഴയ വർഷം ഒഴിവാക്കുന്നു
+                elif re.match(r'^\d{4}$', filter_tag) and re.match(r'^\d{4}$', tag_lower):
+                    continue
+                # സീസൺ ആണ് മാറ്റുന്നതെങ്കിൽ പഴയ സീസൺ ഒഴിവാക്കുന്നു
+                elif re.match(r'^s\d{2}$', filter_tag) and re.match(r'^s\d{2}$', tag_lower):
+                    continue
+                
+                updated_tags.append(tag)
+                
+            # പുതിയ ടാഗ് ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
+            if filter_tag not in updated_tags:
+                updated_tags.append(filter_tag)
+            
+            # പുതിയ ടാഗ് കോമ്പിനേഷൻ ഇന്റർഫേസിൽ അപ്ഡേറ്റ് ചെയ്യുന്നു
+            new_search_entry = f"{base_movie_query} [{' + '.join(updated_tags)}]"
             BUTTONS[key] = new_search_entry
             
-            # 2. ⚡ ORDER-INDEPENDENT QUERY BUILDER: ടാഗുകളെ തരംതിരിക്കുന്നു
+            # 2. ORDER-INDEPENDENT QUERY BUILDER FOR DB: ടാഗുകളെ തരംതിരിക്കുന്നു
             target_lang = ""
             target_quality = ""
             target_year = ""
             target_season = ""
             
-            # ലാംഗ്വേജ് മാപ്പിംഗ് വേരിയന്റുകൾ
-            lang_variants = {
-                "malayalam": "malayalam", "tamil": "tamil", "english": "english", 
-                "hindi": "hindi", "telugu": "telugu", "kannada": "kannada",
-                "dual": "dual", "multi": "multi"
-            }
-            
-            # എല്ലാ ടാഗുകളിലൂടെയും കടന്നുപോയി അവ എന്താണെന്ന് തരംതിരിക്കുന്നു
-            for tag in existing_tags:
+            for tag in updated_tags:
                 tag_lower = tag.lower()
-                if tag_lower in lang_variants:
+                if tag_lower in all_languages:
                     target_lang = tag_lower
-                elif tag_lower in ["360p", "480p", "720p", "1080p", "1440p", "2160p"]:
+                elif tag_lower in all_qualities:
                     target_quality = tag_lower
-                elif re.match(r'^\d{4}$', tag_lower): # 4 അക്ക വർഷമാണെങ്കിൽ
+                elif re.match(r'^\d{4}$', tag_lower):
                     target_year = tag_lower
-                elif re.match(r'^s\d{2}$', tag_lower): # സീസൺ ആണെങ്കിൽ
+                elif re.match(r'^s\d{2}$', tag_lower):
                     target_season = tag_lower
 
-            # 3. 🔍 MULTI-VARIANT DB SEARCH: മാക്സിമം റിസൾട്ട് കിട്ടാൻ സാധ്യതയുള്ള ക്വറികൾ ഉണ്ടാക്കുന്നു
             files = []
-            
-            # ബേസ് മൂവി പേര് വെച്ച് തുടങ്ങുന്നു
             db_queries = [base_movie_query]
             
-            # വർഷം ഉണ്ടെങ്കിൽ അത് മൂവി പേരിന്റെ തൊട്ടടുത്ത് ചേർക്കുന്നു (പൈത്തൺ ബോട്ടുകളിൽ ഇതാണ് ഏറ്റവും മികച്ചത്)
+            # സിനിമയുടെ വർഷം ഉണ്ടെങ്കിൽ അത് മൂവി പേരിന്റെ തൊട്ടടുത്ത് ചേർക്കുന്നു
             if target_year:
                 db_queries = [f"{base_movie_query} {target_year}"]
             
-            # സീസൺ സാധ്യതകൾ ചേർക്കുന്നു
+            # ⚙️ SEASONS MAXIMUM RESULT LOGIC (EPISODES COMPATIBLE)
+            # S01, S1, Season 01 എന്നിവയ്ക്കൊപ്പം S01E01, S01E02 പോലുള്ള എല്ലാ എപ്പിസോഡുകളും ഫെച്ച് ചെയ്യാൻ
             if target_season:
                 s_num = int(target_season[1:])
                 extended_queries = []
                 for q in db_queries:
                     extended_queries.extend([
-                        f"{q} s{s_num:02d}", f"{q} s{s_num}", 
-                        f"{q} season {s_num}", f"{q} season{s_num}"
+                        f"{q} s{s_num:02d}",        # eg: Bigil s01
+                        f"{q} s{s_num:02d}e",       # eg: Bigil s01e (S01E01, S01E02 ഫയലുകൾ പിടിക്കാൻ)
+                        f"{q} s{s_num}",            # eg: Bigil s1
+                        f"{q} season {s_num}",      # eg: Bigil season 1
+                        f"{q} season{s_num}"        # eg: Bigil season1
                     ])
                 db_queries = extended_queries
 
-            # ലാംഗ്വേജ് സാധ്യതകൾ ചേർക്കുന്നു (Short codes ഉൾപ്പെടെ)
+            # லാംഗ്വേജ് സാധ്യതകൾ ചേർക്കുന്നു (Short codes ഉൾപ്പെടെ)
             if target_lang:
                 extended_queries = []
                 lang_lists = [target_lang]
@@ -672,7 +691,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         extended_queries.append(f"{q} {lang}")
                 db_queries = extended_queries
 
-            # ക്വാളിറ്റി സാധ്യതകൾ ചേർക്കുന്നു
+            # ക്വാളിറ്റി സാധ്യതകൾ ചേർക്കുന്നു (FHD, HD, UHD വേരിയന്റുകൾ)
             if target_quality:
                 extended_queries = []
                 qual_lists = [target_quality]
@@ -713,9 +732,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             for file in unique_files[:10]:
                 btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
             
+            # 🛠️ ഫിൽട്ടർ റിസൾട്ടിൽ 10-ൽ കൂടുതൽ ഫയലുകൾ ഉണ്ടെങ്കിൽ ലാംഗ്വേജ്, ക്വാളിറ്റി, വർഷം എന്നിവയിലും NEXT ബട്ടൺ വരും
             if total_results > 10:
                 btn.append([
-                    InlineKeyboardButton(text=f"𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
+                    InlineKeyboardButton(text=f"   𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
                     InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
                 ])
             
@@ -726,9 +746,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
-            return await query.answer()
-
-                   
+            return await query.answer()                                                                                                                  
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "delallconfirm":
