@@ -275,6 +275,8 @@ async def give_filters(client, message):
 
 
 
+                         
+
 @Client.on_callback_query(filters.regex(r"^next"))
 async def next_page(bot, query):
     ident, req, key, offset = query.data.split("_")
@@ -295,23 +297,21 @@ async def next_page(bot, query):
     base_movie_query = search
     existing_tags = []
     
-    # 🛠️ MULTI-FILTER DETECTOR: ബ്രാക്കറ്റ് ചിഹ്നവും സ്പേസും ഉണ്ടെങ്കിൽ മാത്രം മൾട്ടി ഫിൽട്ടർ ആയി കണക്കാക്കുന്നു
+    # മൾട്ടി ഫിൽട്ടർ ഡിറ്റക്ടർ
     if " [" in search and search.endswith("]"):
         base_movie_query = search.split(" [")[0].strip()
         existing_tags = search.split(" [")[1].replace("]", "").split(" + ")
 
-    # കാറ്റഗറി ലിസ്റ്റുകൾ
     all_languages = ["malayalam", "tamil", "english", "hindi", "telugu", "kannada", "dual", "multi"]
     all_qualities = ["360p", "480p", "720p", "1080p", "1440p", "2160p"]
 
-    # 1. ടാഗുകൾ നിലവിലുണ്ടെങ്കിൽ ഏത് ഓർഡറിലും പേജിനേഷൻ വർക്ക് ചെയ്യിക്കാനുള്ള ലോജിക്
+    # 1. ഫിൽട്ടർ സെർച്ച് പേജിനേഷൻ ലോജിക്
     if existing_tags:
         target_lang = ""
         target_quality = ""
         target_year = ""
         target_season = ""
         
-        # നെക്സ്റ്റ് പേജിലും ടാഗുകളെ അവയുടെ ടൈപ്പ് അനുസരിച്ച് തരംതിരിക്കുന്നു (Order-Independent)
         for tag in existing_tags:
             tag_lower = tag.lower()
             if tag_lower in all_languages:
@@ -328,17 +328,13 @@ async def next_page(bot, query):
         if target_year:
             db_queries = [f"{base_movie_query} {target_year}"]
         
-        # ⚙️ SEASONS MAXIMUM RESULT LOGIC FOR NEXT PAGE (EPISODES COMPATIBLE)
         if target_season:
             s_num = int(target_season[1:])
             extended_queries = []
             for q in db_queries:
                 extended_queries.extend([
-                    f"{q} s{s_num:02d}",        # eg: Bigil s01
-                    f"{q} s{s_num:02d}e",       # eg: Bigil s01e (S01E01, S01E02 ഫയലുകൾ പിടിക്കാൻ)
-                    f"{q} s{s_num}",            # eg: Bigil s1
-                    f"{q} season {s_num}",      # eg: Bigil season 1
-                    f"{q} season{s_num}"        # eg: Bigil season1
+                    f"{q} s{s_num:02d}", f"{q} s{s_num:02d}e", 
+                    f"{q} s{s_num}", f"{q} season {s_num}", f"{q} season{s_num}"
                 ])
             db_queries = extended_queries
 
@@ -370,13 +366,12 @@ async def next_page(bot, query):
                     extended_queries.append(f"{q} {qual}")
             db_queries = extended_queries
 
-        # എല്ലാ കോമ്പിനേഷനുകളും ഒന്നിച്ച് ഡാറ്റാബേസിൽ തിരയുന്നു
         for final_query in db_queries:
-            res_files, _, _ = await get_search_results(final_query.lower(), offset=0, filter=True)
+            # 💡 FIX: offset=0 മാറ്റി വേരിയബിൾ ആയ offset നൽകി
+            res_files, _, _ = await get_search_results(final_query.lower(), offset=offset, filter=True)
             if res_files:
                 files.extend(res_files)
                 
-        # ഡ്യൂപ്ലിക്കേറ്റ് ഒഴിവാക്കൽ
         seen_ids = set()
         unique_files = []
         for f in files:
@@ -384,11 +379,12 @@ async def next_page(bot, query):
                 seen_ids.add(f.file_id)
                 unique_files.append(f)
         total = len(unique_files)
-        page_files = unique_files[offset:offset + 10]
+        page_files = unique_files[:10] # ഓഫ്സെറ്റ് അനുസരിച്ച് ആദ്യത്തെ 10 എണ്ണം എടുക്കുന്നു
     
-    # 2. നോർമൽ സെർച്ച് ലോജിക് (ബട്ടണുകൾ ഒന്നും ക്ലിക്ക് ചെയ്യാത്ത അവസ്ഥയിൽ)
+    # 2. സാധാരണ നോർമൽ സെർച്ച് പേജിനേഷൻ ലോജിക്
     else:
-        res_files, _, _ = await get_search_results(base_movie_query.lower(), offset=0, filter=True)
+        # 💡 FIX: offset=0 മാറ്റി വേരിയബിൾ ആയ offset നൽകി
+        res_files, _, _ = await get_search_results(base_movie_query.lower(), offset=offset, filter=True)
         if res_files:
             files.extend(res_files)
         
@@ -399,7 +395,7 @@ async def next_page(bot, query):
                 seen_ids.add(f.file_id)
                 unique_files.append(f)
         total = len(unique_files)
-        page_files = unique_files[offset:offset + 10]
+        page_files = unique_files[:10]
 
     if not page_files:
         await query.answer("No more files found", show_alert=True)
@@ -412,7 +408,9 @@ async def next_page(bot, query):
     for file in page_files:
         btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
 
-    if total > (offset + 10):
+    # അടുത്ത പേജുകൾ ഉണ്ടോ എന്ന് നോക്കുന്നു (ടോട്ടൽ റിസൾട്ട് പ്ലസ് ഓഫ്സെറ്റ് വെച്ച്)
+    # get_search_results എപ്പോഴും അടുത്ത 10 എണ്ണം തരുന്നതിനാൽ ടോട്ടൽ ലിസ്റ്റ് വെച്ച് നോക്കാം
+    if len(page_files) >= 10:
         n_offset = offset + 10
     else:
         n_offset = ''
@@ -425,17 +423,17 @@ async def next_page(bot, query):
     if n_offset == '':
         btn.append([
             InlineKeyboardButton("Bᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / {math.ceil(total / 10)}", callback_data="pages")
+            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / {math.ceil((offset + len(page_files)) / 10) if n_offset == '' else '...'} ", callback_data="pages")
         ])
     elif off_set is None:
         btn.append([
-            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / {math.ceil(total / 10)}", callback_data="pages"),
+            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / ...", callback_data="pages"),
             InlineKeyboardButton("Nᴇxᴛ", callback_data=f"next_{req}_{key}_{n_offset}")
         ])
     else:
         btn.append([
             InlineKeyboardButton("Bᴀᴄᴋ", callback_data=f"next_{req}_{key}_{off_set}"),
-            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / {math.ceil(total / 10)}", callback_data="pages"),
+            InlineKeyboardButton(f"{math.ceil((offset / 10) + 1)} / ...", callback_data="pages"),
             InlineKeyboardButton("Nᴇxᴛ", callback_data=f"next_{req}_{key}_{n_offset}")
         ])
         
@@ -447,8 +445,9 @@ async def next_page(bot, query):
         await query.answer(f"വളരെ വേഗത്തിലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
         return
         
-    await query.answer()    
-               
+    await query.answer()
+
+
 
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
