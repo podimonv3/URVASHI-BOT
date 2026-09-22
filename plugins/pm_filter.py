@@ -342,6 +342,7 @@ async def next_page(bot, query):
     await query.answer()
 
 
+# ✂️ മാറ്റേണ്ട ഭാഗം: cb_handler-ന്റെ ഉള്ളിലെ ആദ്യത്തെ ഏതാനും വരികൾ മാറ്റി ഇത് നൽകുക
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     # =====================================================================
@@ -350,7 +351,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
     if query.data.startswith("flm_"):
         parts = query.data.split("_")
         action = parts[1]
-        req_user = int(parts[2])
+        # ഇവിടെയാണ് തെറ്റ് വന്നിരുന്നത്, ഇതിപ്പോൾ കൃത്യമാക്കിയിട്ടുണ്ട്:
+        req_user = int(parts[2]) if parts[2].isdigit() else 0
         key = parts[3]
         
         if req_user not in [query.from_user.id, 0]:
@@ -359,7 +361,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         search_query = BUTTONS.get(key)
         if not search_query:
             return await query.answer("സെർച്ച് എക്സ്പെയർ ആയി, ദയവായി വീണ്ടും സെർച്ച് ചെയ്യുക.", show_alert=True)
-            
+
         # ✂️ മാറ്റേണ്ട ഭാഗം: cb_handler-ന്റെ ഉള്ളിൽ 'action == "qualmenu"' മുതൽ 'action == "sendall"' വരെയുള്ള ഭാഗം മാറ്റി ഇത് നൽകുക
         # 1. QUALITY MENU
         if action == "qualmenu":
