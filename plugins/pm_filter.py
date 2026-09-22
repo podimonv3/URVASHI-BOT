@@ -458,23 +458,24 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
             
-        # 6. MULTI-FILTER SUB-BUTTON CLICKED (FIXED INDEX ENGINE)
+        # 6. MULTI-FILTER SUB-BUTTON CLICKED (SYNTAX ERROR FULLY FIXED)
         elif action == "filter":
-            filter_tag = parts[4].lower() if len(parts) > 4 else ""  # 💡 FIXED: Index 4 for target filter word
+            filter_tag = parts[4].lower() if len(parts) > 4 else ""
             if not filter_tag:
                 return await query.answer("❌ തെറ്റായ ഫിൽട്ടർ ടാഗ്!", show_alert=True)
             
             current_search = BUTTONS.get(key, "")
             
             if " [" in current_search:
-                base_query = current_search.split(" [")[0]
+                base_query = current_search.split(" [")
                 existing_tags = current_search.split(" [")[1].replace("]", "").split(" + ")
                 
                 if filter_tag not in existing_tags:
                     existing_tags.append(filter_tag)
                 
-                new_search_entry = f"{base_query} [{" + ".join(existing_tags)}]"
-                db_search_query = f"{base_query} {" ".join(existing_tags)}"
+                # 💡 FIX: സിംഗിൾ കോട്ടുകൾ ഉപയോഗിച്ച് f-string സിന്റാക്സ് ശരിയാക്കി, base_query[0] എടുത്തു.
+                new_search_entry = f"{base_query[0]} [{' + '.join(existing_tags)}]"
+                db_search_query = f"{base_query[0]} {' '.join(existing_tags)}"
             else:
                 new_search_entry = f"{current_search} [{filter_tag}]"
                 db_search_query = f"{current_search} {filter_tag}"
@@ -552,7 +553,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
             except Exception: pass
             return await query.answer()
-
+            
         # 7. RESET BUTTON CLICKED
         elif action == "reset":
             current_search = BUTTONS.get(key, "")
