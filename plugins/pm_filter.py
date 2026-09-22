@@ -41,41 +41,35 @@ CallbackQuery.answer = _patched_answer
 
 # --- 🛠️ ADVANCED MENUS CONFIGURATION (STYLISH FONTS) 🛠️ ---
 LANGUAGES = [
-    ("ᴍᴀʟᴀʏᴀʟᴀᴍ", "malayalam"),
-    ("ᴛᴀᴍɪʟ", "tamil"),
-    ("ᴇɴ🇬ʟɪsʜ", "english"),
-    ("ʜɪɴᴅɪ", "hindi"),
-    ("ᴛᴇʟᴜɢᴜ", "telugu"),
-    ("ᴋᴀɴɴᴀᴅᴀ", "kannada"),
-    ("🇵ᴘᴜɴᴊᴀʙɪ", "punjabi"),
-    ("ʙᴇɴɢᴀʟɪ", "bengali"),
-    ("ᴍᴀʀᴀᴛʜɪ", "marathi"),
-    ("ʙʜᴏᴊᴘᴜʀɪ", "bhojpuri"),
+    ("🇮🇳 ᴍᴀʟᴀʏᴀʟᴀᴍ", "malayalam"),
+    ("🇮🇳 ᴛᴀᴍɪʟ", "tamil"),
+    ("🇬🇧 ᴇɴ🇬ʟɪsʜ", "english"),
+    ("🇮🇳 ʜɪɴᴅɪ", "hindi"),
+    ("🇮🇳 ᴛᴇʟᴜɢᴜ", "telugu"),
+    ("🇮🇳 ᴋᴀɴɴᴀᴅᴀ", "kannada"),
+    ("🇮🇳 🇵ᴘᴜɴᴊᴀʙɪ", "punjabi"),
+    ("🇮🇳 ʙᴇɴɢᴀʟɪ", "bengali"),
+    ("🇮🇳 ᴍᴀʀᴀᴛʜɪ", "marathi"),
+    ("🇮🇳 ʙʜᴏᴊᴘᴜʀɪ", "bhojpuri"),
     ("🔊 ᴅᴜᴀʟ ᴀᴜᴅɪᴏ", "dual"),
     ("🎵 ᴍᴜʟᴛɪ ᴀᴜᴅɪᴏ", "multi")
 ]
 
-QUALITIES = ["360ᴘ", "480ᴘ", "720ᴘ", "1080ᴘ", "1440ᴘ", "2160ᴘ"]
+
+QUALITIES = ["🔹 360ᴘ", "🔷 480ᴘ", "✨ 720ᴘ", "🌟 1080ᴘ", "💎 1440ᴘ", "👑 2160ᴘ"]
+
 
 # പ്രധാന ഫിൽട്ടർ മെനുവിന്റെ ഫോണ്ടും ഇമോജികളും
 def get_filter_menu_buttons(req_id, key):
     return [
         [
-            InlineKeyboardButton("ꜱᴇɴᴅ ᴀʟʟ", callback_data=f"flm_sendall_{req_id}_{key}"),
-            InlineKeyboardButton("ʟᴀɴɢᴜᴀɢе", callback_data=f"flm_langmenu_{req_id}_{key}"),
-            InlineKeyboardButton("ʏᴇᴀʀꜱ", callback_data=f"flm_yearmenu_{req_id}_{key}")
-        ],
-        [
-            InlineKeyboardButton("qᴜᴀʟɪᴛʏ", callback_data=f"flm_qualmenu_{req_id}_{key}"),
-            InlineKeyboardButton("ᴇᴘɪꜱᴏᴅᴇꜱ", callback_data=f"flm_epmenu_{req_id}_{key}"),
-            InlineKeyboardButton("ꜱᴇᴀꜱᴏɴꜱ", callback_data=f"flm_seasonmenu_{req_id}_{key}")
+            InlineKeyboardButton("🌐 ʟᴀɴɢᴜᴀɢе", callback_data=f"flm_langmenu_{req_id}_{key}"),
+            InlineKeyboardButton("🎬 qᴜᴀʟɪᴛʏ", callback_data=f"flm_qualmenu_{req_id}_{key}")
         ]
     ]
 
 def chunk_list(lst, n):
     return [lst[i:i + n] for i in range(0, len(lst), n)]
-
-
 
 
 BUTTONS = {}
