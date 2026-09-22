@@ -406,9 +406,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # ✂️ മാറ്റേണ്ട ഭാഗം: action == "filter" കണ്ടീഷന്റെ ഉള്ളിലുള്ള പഴയ 'if re.match...' ഇഫ് കണ്ടീഷനുകൾ മാറ്റി ഇത് നൽകുക
+        # 5. FILTER SUB-BUTTON CLICKED (FIXED AttributeError)
         elif action == "filter":
-            filter_tag = parts.lower() if len(parts) > 4 else ""
+            # ലിസ്റ്റിലെ നാലാമത്തെ ഇൻഡെക്സ് (ഇൻഡെക്സ് 4) എടുത്ത് lower() ചെയ്യുന്നു
+            filter_tag = parts[4].lower() if len(parts) > 4 else ""
             files = []
             total_results = 0
             
@@ -434,7 +435,36 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 res_files, _, res_total = await get_search_results(f"{search_query} {filter_tag}".lower(), offset=0, filter=True)
                 if res_files:
                     files.extend(res_files)
-                    total_results += res_total                
+                    total_results += res_total
+
+            seen_ids = set()
+            unique_files = []
+            for f in files:
+                if f.file_id not in seen_ids:
+                    seen_ids.add(f.file_id)
+                    unique_files.append(f)
+
+            if not unique_files:
+                return await query.answer(f"❌ {filter_tag.upper()} ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
+                
+            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
+                
+            settings = await get_settings(chat_id)
+            pre = 'filep' if settings['file_secure'] else 'file'
+            
+            btn = get_filter_menu_buttons(req_user, key)
+            for file in unique_files[:10]:
+                btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
+            btn.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
+            
+            cap = f"<b><i>Filtered Results for: {search_query} {filter_tag.upper()}</i></b>"
+            try:
+                await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
+            except FloodWait as e:
+                await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
+                return
+            except Exception: pass
+            return await query.answer()                
 
     if query.data == "close_data":
         await query.message.delete()
