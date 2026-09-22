@@ -363,12 +363,19 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if not search_query:
             return await query.answer("സെർച്ച് എക്സ്പെയർ ആയി, ദയവായി വീണ്ടും സെർച്ച് ചെയ്യുക.", show_alert=True)
             
-        # 1. QUALITY MENU
+        # 1. QUALITY MENU (WITH GREEN TICK ✅)
         if action == "qualmenu":
+            current_search = BUTTONS.get(key, "")
+            # നിലവിൽ സെലക്ട് ചെയ്ത ടാഗുകൾ കണ്ടെത്തുന്നു
+            active_tags = current_search.split(" [")[-1].replace("]", "").split(" + ") if " [" in current_search else []
+            
             buttons_list = []
             for q in QUALITIES:
-                # 💡 FIXED: callback_data modified to pass single filter action cleanly
-                buttons_list.append(InlineKeyboardButton(q, callback_data=f"flm_filter_{req_user}_{key}_{q.split()[-1].lower()}"))
+                q_code = q.split()[-1].lower()
+                # ടാഗ് നിലവിൽ ഉണ്ടെങ്കിൽ ✅ ചേർക്കുന്നു, ഇല്ലെങ്കിൽ സാധാരണ പോലെ കാണിക്കുന്നു
+                display_text = f"✅ {q}" if q_code in active_tags else q
+                buttons_list.append(InlineKeyboardButton(display_text, callback_data=f"flm_filter_{req_user}_{key}_{q_code}"))
+                
             grid = chunk_list(buttons_list, 2)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             try:
@@ -378,12 +385,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
             except Exception: pass
             return await query.answer()
+
             
-        # 2. LANGUAGES MENU
+        # 2. LANGUAGES MENU (WITH GREEN TICK ✅)
         elif action == "langmenu":
+            current_search = BUTTONS.get(key, "")
+            active_tags = current_search.split(" [")[-1].replace("]", "").split(" + ") if " [" in current_search else []
+            
             buttons_list = []
             for name, code in LANGUAGES:
-                buttons_list.append(InlineKeyboardButton(name, callback_data=f"flm_filter_{req_user}_{key}_{code}"))
+                display_text = f"✅ {name}" if code in active_tags else name
+                buttons_list.append(InlineKeyboardButton(display_text, callback_data=f"flm_filter_{req_user}_{key}_{code}"))
+                
             grid = chunk_list(buttons_list, 2)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             try:
@@ -394,11 +407,17 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 3. YEARS MENU
+
+        # 3. YEARS MENU (WITH GREEN TICK ✅)
         elif action == "yearmenu":
+            current_search = BUTTONS.get(key, "")
+            active_tags = current_search.split(" [")[-1].replace("]", "").split(" + ") if " [" in current_search else []
+            
             buttons_list = []
             for year in range(1990, 2027):
-                buttons_list.append(InlineKeyboardButton(f"{year}", callback_data=f"flm_filter_{req_user}_{key}_{year}"))
+                display_text = f"✅ {year}" if str(year) in active_tags else f"{year}"
+                buttons_list.append(InlineKeyboardButton(display_text, callback_data=f"flm_filter_{req_user}_{key}_{year}"))
+                
             grid = chunk_list(buttons_list, 4)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             try:
@@ -409,11 +428,18 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 4. SEASONS MENU
+
+        # 4. SEASONS MENU (WITH GREEN TICK ✅)
         elif action == "seasonmenu":
+            current_search = BUTTONS.get(key, "")
+            active_tags = current_search.split(" [")[-1].replace("]", "").split(" + ") if " [" in current_search else []
+            
             buttons_list = []
             for s in range(1, 11):
-                buttons_list.append(InlineKeyboardButton(f"SEASON {s}", callback_data=f"flm_filter_{req_user}_{key}_s{s:02d}"))
+                s_code = f"s{s:02d}"
+                display_text = f"✅ SEASON {s}" if s_code in active_tags else f"SEASON {s}"
+                buttons_list.append(InlineKeyboardButton(display_text, callback_data=f"flm_filter_{req_user}_{key}_{s_code}"))
+                
             grid = chunk_list(buttons_list, 2)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             try:
@@ -424,15 +450,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 5. HOME BUTTON
-        elif action == "home":
-            db_search = search_query
-            if " [" in search_query:
-                base = search_query.split(" [")[0]
-                tags = search_query.split(" [")[1].replace("]", "").split(" + ")
-                db_search = f"{base} {' '.join(tags)}"
 
-            files, offset, total_results = await get_search_results(db_search.lower(), offset=0, filter=True)
+        # 4. HOME BUTTON (ക്ലിക്ക് ചെയ്യുമ്പോൾ ഫിൽട്ടറുകൾ തനിയെ ക്ലിയർ ആകും)
+        elif action == "home":
+            clean_search = search_query
+            # മെമ്മറിയിലുള്ള ബ്രാക്കറ്റിലെ ടാഗുകൾ [malayalam + 1080p] പൂർണ്ണമായി കളയുന്നു
+            if " [" in search_query:
+                clean_search = search_query.split(" [")[0]
+                BUTTONS[key] = clean_search # 💡 തിരികെ നോർമൽ സെർച്ച് ആക്കി മാറ്റി
+
+            files, offset, total_results = await get_search_results(clean_search.lower(), offset=0, filter=True)
             chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
             settings = await get_settings(chat_id)
             
@@ -445,11 +472,8 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     InlineKeyboardButton(text=f"𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
                     InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
                 ])
-            
-            if " [" in search_query:
-                btn.append([InlineKeyboardButton("🔄 RESET FILTERS", callback_data=f"flm_reset_{req_user}_{key}")])
 
-            cap = f"<b><i>Here is What I Found For: {search_query}</i></b>"
+            cap = f"<b><i>Here is What I Found For: {clean_search}</i></b>"
             try:
                 await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
             except FloodWait as e:
@@ -457,8 +481,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
             except Exception: pass
             return await query.answer()
+
             
-        # 6. MULTI-FILTER SUB-BUTTON CLICKED (SYNTAX ERROR FULLY FIXED)
+        # 6. MULTI-FILTER SUB-BUTTON CLICKED (MAXIMUM RESULTS ENGINE)
         elif action == "filter":
             filter_tag = parts[4].lower() if len(parts) > 4 else ""
             if not filter_tag:
@@ -466,16 +491,16 @@ async def cb_handler(client: Client, query: CallbackQuery):
             
             current_search = BUTTONS.get(key, "")
             
+            # ടാഗുകൾ ഒന്നിലധികം ഉണ്ടെങ്കിൽ ഒന്നിച്ച് ചേർക്കുന്നു
             if " [" in current_search:
-                base_query = current_search.split(" [")
+                base_query = current_search.split(" [")[0]
                 existing_tags = current_search.split(" [")[1].replace("]", "").split(" + ")
                 
                 if filter_tag not in existing_tags:
                     existing_tags.append(filter_tag)
                 
-                # 💡 FIX: സിംഗിൾ കോട്ടുകൾ ഉപയോഗിച്ച് f-string സിന്റാക്സ് ശരിയാക്കി, base_query[0] എടുത്തു.
-                new_search_entry = f"{base_query[0]} [{' + '.join(existing_tags)}]"
-                db_search_query = f"{base_query[0]} {' '.join(existing_tags)}"
+                new_search_entry = f"{base_query} [{' + '.join(existing_tags)}]"
+                db_search_query = f"{base_query} {' '.join(existing_tags)}"
             else:
                 new_search_entry = f"{current_search} [{filter_tag}]"
                 db_search_query = f"{current_search} {filter_tag}"
@@ -484,22 +509,30 @@ async def cb_handler(client: Client, query: CallbackQuery):
             files = []
             total_results = 0
             
-            # സീസൺ വേരിയന്റുകൾ പരിശോധിക്കുന്നു (eg: season 1, s01)
+            # 1. ⚙️ SEASONS MAXIMUM RESULT LOGIC
             if re.match(r'^s\d{2}$', filter_tag):
                 s_num = int(filter_tag[1:])
+                clean_query = db_search_query.replace(filter_tag, "").strip()
                 search_variants = [
-                    db_search_query,
-                    f"{db_search_query.replace(filter_tag, '')} season {s_num}",
-                    f"{db_search_query.replace(filter_tag, '')} season {s_num:02d}"
+                    f"{clean_query} s{s_num:02d}",
+                    f"{clean_query} s{s_num}",
+                    f"{clean_query} season {s_num}",
+                    f"{clean_query} season{s_num}"
                 ]
-                for variant in search_variants:
-                    res_files, _, res_total = await get_search_results(variant.lower(), offset=0, filter=True)
-                    if res_files:
-                        files.extend(res_files)
-                        total_results += res_total
-                        break
-                        
-            # ലാംഗ്വേജ് വേരിയന്റുകൾ പരിശോധിക്കുന്നു
+            
+            # 2. ⚙️ QUALITY MAXIMUM RESULT LOGIC (FHD, HD, UHD വേരിയന്റുകൾ)
+            elif filter_tag in ["360p", "480p", "720p", "1080p", "1440p", "2160p"]:
+                clean_query = db_search_query.replace(filter_tag, "").strip()
+                if filter_tag == "1080p":
+                    search_variants = [f"{clean_query} 1080p", f"{clean_query} 1080", f"{clean_query} fhd", f"{clean_query} full hd"]
+                elif filter_tag == "720p":
+                    search_variants = [f"{clean_query} 720p", f"{clean_query} 720", f"{clean_query} hd"]
+                elif filter_tag == "2160p":
+                    search_variants = [f"{clean_query} 2160p", f"{clean_query} 2160", f"{clean_query} 4k", f"{clean_query} uhd"]
+                else:
+                    search_variants = [f"{clean_query} {filter_tag}"]
+
+            # 3. ⚙️ LANGUAGES MAXIMUM RESULT LOGIC (Short codes & Dual/Multi Audio)
             else:
                 lang_variants = {
                     "malayalam": ["malayalam", "mal"],
@@ -507,23 +540,26 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     "english": ["english", "eng"],
                     "hindi": ["hindi", "hin"],
                     "telugu": ["telugu", "tel"],
-                    "kannada": ["kannada", "kan"]
+                    "kannada": ["kannada", "kan"],
+                    "dual": ["dual", "dual audio", "hindi english", "malayalam tamil"],
+                    "multi": ["multi", "multi audio", "multiprint"]
                 }
                 
+                clean_query = db_search_query.replace(filter_tag, "").strip()
                 if filter_tag in lang_variants:
-                    for variant in lang_variants[filter_tag]:
-                        v_search = db_search_query.replace(filter_tag, variant)
-                        res_files, _, res_total = await get_search_results(v_search.lower(), offset=0, filter=True)
-                        if res_files:
-                            files.extend(res_files)
-                            total_results += res_total
-                            break
+                    search_variants = [f"{clean_query} {variant}" for variant in lang_variants[filter_tag]]
                 else:
-                    res_files, _, res_total = await get_search_results(db_search_query.lower(), offset=0, filter=True)
-                    if res_files:
-                        files.extend(res_files)
-                        total_results += res_total
+                    # 4. ⚙️ YEARS LOGIC (സിനിമയുടെ പേര് + വർഷം നേരിട്ട് തിരയുന്നു)
+                    search_variants = [db_search_query]
 
+            # 🚀 എല്ലാ വേരിയന്റുകളും ഒരേസമയം ഡാറ്റാബേസിൽ തിരഞ്ഞ് റിസൾട്ടുകൾ കൂട്ടുന്നു
+            for variant in search_variants:
+                res_files, _, res_total = await get_search_results(variant.lower(), offset=0, filter=True)
+                if res_files:
+                    files.extend(res_files)
+                    total_results += res_total
+
+            # ഡ്യൂപ്ലിക്കേറ്റ് ഫയലുകൾ കളയുന്നു
             seen_ids = set()
             unique_files = []
             for f in files:
@@ -539,11 +575,10 @@ async def cb_handler(client: Client, query: CallbackQuery):
             settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
             
+            # 💡 RESET FILTERS ബട്ടൺ ഇവിടെ നിന്നും ഒഴിവാക്കി
             btn = get_filter_menu_buttons(req_user, key)
             for file in unique_files[:10]:
                 btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
-            
-            btn.append([InlineKeyboardButton("🔄 RESET FILTERS", callback_data=f"flm_reset_{req_user}_{key}")])
             
             cap = f"<b><i>Filtered Results for: {new_search_entry.upper()}</i></b>"
             try:
@@ -553,32 +588,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return
             except Exception: pass
             return await query.answer()
-            
-        # 7. RESET BUTTON CLICKED
-        elif action == "reset":
-            current_search = BUTTONS.get(key, "")
-            if " [" in current_search:
-                current_search = current_search.split(" [")[0]
-                BUTTONS[key] = current_search
-                
-            files, offset, total_results = await get_search_results(current_search.lower(), offset=0, filter=True)
-            chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
-            settings = await get_settings(chat_id)
-            
-            pre = 'filep' if settings['file_secure'] else 'file'
-            btn = get_filter_menu_buttons(req_user, key)
-            for file in files[:10]:
-                btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
-            
-            if total_results > 10:
-                btn.append([
-                    InlineKeyboardButton(text=f"𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
-                    InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
-                ])
-                
-            cap = f"<b><i>Here is What I Found In My Database For Your Query: {current_search}</i></b>"
-            await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
-            return await query.answer("Filters Cleared! 🔄", show_alert=True)    
+                   
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "delallconfirm":
