@@ -316,7 +316,7 @@ async def start(client, message):
                     chat_id=message.from_user.id,
                     file_id=msg.get("file_id"),
                     caption=f_caption,
-                    protect_content=msg.get('protect', False),
+                    protect_content=True,
                     )
             except FloodWait as e:
                 await asyncio.sleep(e.x)
@@ -326,7 +326,7 @@ async def start(client, message):
                         chat_id=message.from_user.id,
                         file_id=msg.get("file_id"),
                         caption=f_caption,
-                        protect_content=msg.get('protect', False),
+                        protect_content=True,
                         )
                 except UserIsBlocked:
                     logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫ്ലഡ്‌വൈറ്റിന് ശേഷം ബാച്ച് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
@@ -377,10 +377,10 @@ async def start(client, message):
                         f_caption = getattr(msg, 'caption', file_name)
                         
                     try:
-                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True)
                     except FloodWait as e:
                         await asyncio.sleep(e.x)
-                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True)
                     except UserIsBlocked:
                         logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് ഫയൽ കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
                         break
@@ -391,10 +391,10 @@ async def start(client, message):
                 continue
             else:
                 try:
-                    await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
+                    await msg.copy(message.chat.id, protect_content=True)
                 except FloodWait as e:
                     await asyncio.sleep(e.x)
-                    await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
+                    await msg.copy(message.chat.id, protect_content=True)
                 except UserIsBlocked:
                     logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് മെസ്സേജ് കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
                     break
