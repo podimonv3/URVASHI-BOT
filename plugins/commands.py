@@ -299,6 +299,8 @@ async def start(client, message):
             os.remove(file)
             BATCH_FILES[file_id] = msgs
             
+        # 📂 ബാച്ചായി അയക്കുന്ന ഫയലുകളുടെ മെസ്സേജ് ഐഡികൾ സൂക്ഷിക്കാൻ ലിസ്റ്റ്
+        batch_msg_ids = []
         for msg in msgs:
             title = msg.get("title")
             size=get_size(int(msg.get("size", 0)))
@@ -312,37 +314,58 @@ async def start(client, message):
             if f_caption is None:
                 f_caption = f"{title}"
             try:
-                await client.send_cached_media(
+                b_msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
                     file_id=msg.get("file_id"),
                     caption=f_caption,
-                    protect_content=True,
+                    protect_content=msg.get('protect', False),
                     )
+                if b_msg:
+                    batch_msg_ids.append(b_msg.id) # ഐഡി ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
             except FloodWait as e:
                 await asyncio.sleep(e.x)
                 logger.warning(f"Floodwait of {e.x} sec.")
                 try:
-                    await client.send_cached_media(
+                    b_msg = await client.send_cached_media(
                         chat_id=message.from_user.id,
                         file_id=msg.get("file_id"),
                         caption=f_caption,
-                        protect_content=True,
+                        protect_content=msg.get('protect', False),
                         )
+                    if b_msg:
+                        batch_msg_ids.append(b_msg.id)
                 except UserIsBlocked:
                     logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫ്ലഡ്‌വൈറ്റിന് ശേഷം ബാച്ച് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
                     break
                 except Exception: continue
             except UserIsBlocked:
                 logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
-                break # യൂസർ ബ്ലോക്ക് ചെയ്തതുകൊണ്ട് ബാക്കി ഫയലുകൾ അയക്കുന്നത് ഇവിടെ നിർത്തുന്നു
+                break 
             except Exception as e:
                 logger.warning(e, exc_info=True)
                 continue
             await asyncio.sleep(1) 
             
+        # ⏳ ബാച്ച് ഫയലുകൾ എല്ലാം അയച്ചു കഴിഞ്ഞാൽ സെപ്പറേറ്റ് ടൈമർ ടെക്സ്റ്റ് അയക്കുന്നു
+        if batch_msg_ids:
+            try:
+                mins = int(AUTO_DELETE_TIME / 60)              
+                warn_msg = await client.send_message(
+                    chat_id=message.from_user.id,
+                    text=AUTO_DEL_TEXT,                    
+                    parse_mode=enums.ParseMode.HTML
+                )
+                batch_msg_ids.append(warn_msg.id) # വാർണിംഗ് മെസ്സേജ് ഐഡിയും ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
+                
+                # 🗑️ സുരക്ഷിതമായ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി എല്ലാ ഫയലുകളും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു
+                asyncio.create_task(auto_delete_messages(client, message.from_user.id, batch_msg_ids, AUTO_DELETE_TIME))
+            except Exception as e:
+                logger.error(f"Error in BATCH auto-delete text: {e}")
+                
         try: await sts.delete()
         except: pass
         return
+
         
     elif data.split("-", 1)[0] == "DSTORE":
         try:
@@ -359,9 +382,13 @@ async def start(client, message):
             f_msg_id, l_msg_id, f_chat_id = decoded.split("_", 2)
             protect = "/pbatch" if PROTECT_CONTENT else "batch"
         diff = int(l_msg_id) - int(f_msg_id)
+        
+        # 📂 അയക്കുന്ന ഫയലുകളുടെ മെസ്സേജ് ഐഡികൾ ശേഖരിക്കാൻ ഒരു ലിസ്റ്റ്
+        dstore_msg_ids = []
+        
         async for msg in client.iter_messages(int(f_chat_id), int(l_msg_id), int(f_msg_id)):
+            copied_msg = None
             if msg.media:
-                # 🛠️ ഫിക്സ്: Enum-ൽ നിന്നും സ്ട്രിങ് വാല്യൂ (.value) എടുക്കുന്നു
                 media_type = msg.media.value if hasattr(msg.media, "value") else msg.media
                 media = getattr(msg, media_type, None)
                 
@@ -377,10 +404,14 @@ async def start(client, message):
                         f_caption = getattr(msg, 'caption', file_name)
                         
                     try:
-                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True)
+                        copied_msg = await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        if copied_msg:
+                            dstore_msg_ids.append(copied_msg.id)
                     except FloodWait as e:
                         await asyncio.sleep(e.x)
-                        await msg.copy(message.chat.id, caption=f_caption, protect_content=True)
+                        copied_msg = await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        if copied_msg:
+                            dstore_msg_ids.append(copied_msg.id)
                     except UserIsBlocked:
                         logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് ഫയൽ കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
                         break
@@ -391,10 +422,14 @@ async def start(client, message):
                 continue
             else:
                 try:
-                    await msg.copy(message.chat.id, protect_content=True)
+                    copied_msg = await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
+                    if copied_msg:
+                        dstore_msg_ids.append(copied_msg.id)
                 except FloodWait as e:
                     await asyncio.sleep(e.x)
-                    await msg.copy(message.chat.id, protect_content=True)
+                    copied_msg = await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
+                    if copied_msg:
+                        dstore_msg_ids.append(copied_msg.id)
                 except UserIsBlocked:
                     logger.warning(f"യൂസർ ({message.chat.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ബാച്ച് മെസ്സേജ് കോപ്പി ചെയ്യാൻ കഴിഞ്ഞില്ല.")
                     break
@@ -402,6 +437,23 @@ async def start(client, message):
                     logger.exception(e)
                     continue
             await asyncio.sleep(1) 
+            
+        # ⏳ ഫയലുകൾ കോപ്പി ചെയ്ത് കഴിഞ്ഞാൽ സെപ്പറേറ്റ് ടൈമർ ടെക്സ്റ്റ് അയക്കുന്നു
+        if dstore_msg_ids:
+            try:
+                mins = int(AUTO_DELETE_TIME / 60)                
+                warn_msg = await client.send_message(
+                    chat_id=message.chat.id,
+                    text=AUTO_DEL_TEXT,                    
+                    parse_mode=enums.ParseMode.HTML
+                )
+                dstore_msg_ids.append(warn_msg.id) # വാർണിംഗ് മെസ്സേജ് ഐഡിയും ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
+                
+                # 🗑️ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി എല്ലാ ഫയലുകളും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു
+                asyncio.create_task(auto_delete_messages(client, message.chat.id, dstore_msg_ids, AUTO_DELETE_TIME))
+            except Exception as e:
+                logger.error(f"Error in DSTORE auto-delete text: {e}")
+                
         return await sts.delete()
 
         
