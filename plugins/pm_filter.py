@@ -72,6 +72,33 @@ def chunk_list(lst, n):
     return [lst[i:i + n] for i in range(0, len(lst), n)]
 
 
+
+# ⏱️ പ്രധാന ഫയലിൽ നൽകിയ അതേ സമയം ഇവിടെയും നൽകുക
+AUTO_DELETE_TIME = 180
+
+# 📝 Warning Message Template
+AUTO_DEL_TEXT = (
+    "⚠️ <b>Important Notice / ശ്രദ്ധിക്കുക</b>\n\n"
+    "To avoid copyright restrictions, This file will be automatically deleted In 3 min. Please forward it to your Saved Messages immediately to download without interruption!\n\n"    
+    "കോപ്പിറൈറ്റ് പ്രശ്നങ്ങൾ ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആയിപ്പോകും.. അതിനാൽ ഫയൽ ലഭിച്ച ഉടൻ തന്നെ നിങ്ങളുടെ Saved Messages-ലേക്ക് Forward ചെയ്ത് വെക്കുക!"
+)
+
+
+# 🗑️ ബാക്ക്ഗ്രൗണ്ടിൽ മെസ്സേജുകൾ സുരക്ഷിതമായി ഡിലീറ്റ് ചെയ്യാനുള്ള ഫങ്ഷൻ
+async def auto_delete_messages(client, chat_id, message_ids, delay):
+    await asyncio.sleep(delay)
+    for msg_id in message_ids:
+        try:
+            await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
+        except FloodWait as e:
+            await asyncio.sleep(e.x)
+            try:
+                await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
+            except Exception: pass
+        except Exception: pass
+
+
+
 BUTTONS = {}
 SPELL_CHECK = {}
 
@@ -797,7 +824,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         files_ = await get_file_details(file_id)
         if not files_:
             return await query.answer('No such file exist.')
-        files = files_[0]
+        files = files_
         title = files.file_name
         size = get_size(files.file_size)
         f_caption = files.file_name
@@ -812,7 +839,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         await query.answer()
         
-        # ഇവിടെ നിന്നും reply_markup (ബട്ടണുകൾ) ഒഴിവാക്കി
+        # 1. ഫയൽ അയക്കുന്നു
         xd = await client.send_cached_media(
             chat_id=query.from_user.id,
             file_id=file_id,
@@ -820,13 +847,21 @@ async def cb_handler(client: Client, query: CallbackQuery):
             protect_content=True if ident == "checksubp" else False
         )
         
+        # 2. 'predvd' ഫയലുകൾ ആണെങ്കിൽ മാത്രം സെപ്പറേറ്റ് ടെക്സ്റ്റും ടൈമറും നൽകി ഓട്ടോ ഡിലീറ്റ് ചെയ്യുന്നു
         if title and any(keyword in title.lower() for keyword in ['predvd', 'predvdrip']):
-            f_caption += "\n⚠️<b><i>ഈ മൂവിയുടെ ഫയൽ എവിടെയെങ്കിലും ഫോർവേഡ് ചെയ്തു വെക്കുക എന്നിട്ട് ഡൗൺലോഡ് ചെയ്യുക\n\n3 മിനിറ്റിൽ ഇവിടുന്ന് ഡിലീറ്റ് ആവും🗑\n\n⚠️Forward the file of this Movie somewhere and download it\n\nWill be deleted from here in 3 minutes🗑</i></b>"
-            
-            # എഡിറ്റ് ചെയ്യുമ്പോഴും ബട്ടണുകൾ വരാതിരിക്കാൻ reply_markup ഒഴിവാക്കി
-            await xd.edit_caption(caption=f_caption)
-            await asyncio.sleep(180)                   
-            await xd.delete()
+            try:
+                # ടൈമർ ബട്ടൺ സഹിതമുള്ള സെപ്പറേറ്റ് മെസ്സേജ്
+                mins = int(AUTO_DELETE_TIME / 60)                            
+                warn_msg = await client.send_message(
+                    chat_id=query.from_user.id,
+                    text=AUTO_DEL_TEXT,                   
+                    parse_mode=enums.ParseMode.HTML
+                )
+                
+                # സുരക്ഷിതമായ നോൺ-ബ്ലോക്കിംഗ് ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി ഫയലും ടെക്സ്റ്റും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യുന്നു
+                asyncio.create_task(auto_delete_messages(client, query.from_user.id, [xd.id, warn_msg.id], AUTO_DELETE_TIME))
+            except Exception as e:
+                logger.error(f"Error in checksub auto-delete: {e}")
 
 
     elif query.data.startswith("killfilesdq"):
@@ -1051,9 +1086,19 @@ async def auto_filter(client, msg, spoll=False):
             InlineKeyboardButton(text="Nᴇxᴛ", callback_data=f"next_{req}_{key}_{offset}")]
         )     
     cap = f"<b><i>Found Results For Your Query {search}</i></b>\n\n<b><i><u>For better result:</u></i></b>\n<i>↪bhramam      ❌\n↪bhramam 2021 ✅</i>"
-    fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
-
+    
+    # ⏱️ സെർച്ച് റിസൾട്ടിനൊപ്പം ഡിലീറ്റ് വാർണിംഗ് ടെക്സ്റ്റ് കൂടി ചേർക്കുന്നു
+    mins = int(AUTO_DELETE_TIME / 60)
+    cap += f"\n\n⏳ <i>This search result will be auto deleted in {mins} mins to avoid group clutter.</i>"
+    
+    try:
+        fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
+        # 🗑️ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി സെർച്ച് റിസൾട്ട് മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു
+        asyncio.create_task(auto_delete_messages(client, message.chat.id, [fmsg.id], AUTO_DELETE_TIME))
+    except Exception as e:
+        logger.error(f"Error in auto_filter auto-delete: {e}")
            
+
 
 
 async def global_filters(client, message, text=False):
@@ -1105,11 +1150,12 @@ async def global_filters(client, message, text=False):
                     else:
                         button = []
 
+                    g_msg = None
                     if fileid == "None":
                         if btn == "[]":
                             while True:
                                 try:
-                                    await client.send_message(
+                                    g_msg = await client.send_message(
                                         group_id, 
                                         reply_text, 
                                         disable_web_page_preview=True,
@@ -1122,7 +1168,7 @@ async def global_filters(client, message, text=False):
                         else:
                             while True:
                                 try:
-                                    await client.send_message(
+                                    g_msg = await client.send_message(
                                         group_id,
                                         reply_text,
                                         disable_web_page_preview=True,
@@ -1137,7 +1183,7 @@ async def global_filters(client, message, text=False):
                     elif btn == "[]":
                         while True:
                             try:
-                                await client.send_cached_media(
+                                g_msg = await client.send_cached_media(
                                     group_id,
                                     fileid,
                                     caption=reply_text or "",
@@ -1150,9 +1196,7 @@ async def global_filters(client, message, text=False):
                     else:
                         while True:
                             try:
-                                # Replaced message.reply_cached_media with client.send_cached_media 
-                                # to remain structurally uniform and reliable across channels/groups
-                                await client.send_cached_media(
+                                g_msg = await client.send_cached_media(
                                     group_id,
                                     fileid,
                                     caption=reply_text or "",
@@ -1163,6 +1207,10 @@ async def global_filters(client, message, text=False):
                             except FloodWait as e:
                                 logger.warning(f"FloodWait triggered! Sleeping for {e.value} seconds.")
                                 await asyncio.sleep(e.value)
+                    
+                    # 🗑️ കസ്റ്റം ഫിൽട്ടർ മെസ്സേജ് വിജയകരമായി അയച്ചാൽ അത് ബാക്ക്ഗ്രൗണ്ടിൽ ഡിലീറ്റ് ചെയ്യാൻ ടാസ്ക് നൽകുന്നു
+                    if g_msg:
+                        asyncio.create_task(auto_delete_messages(client, group_id, [g_msg.id], AUTO_DELETE_TIME))
                         
                 except Exception as e:
                     logger.exception(e)
