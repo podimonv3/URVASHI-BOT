@@ -76,12 +76,12 @@ def chunk_list(lst, n):
 # ⏱️ പ്രധാന ഫയലിൽ നൽകിയ അതേ സമയം ഇവിടെയും നൽകുക
 AUTO_DELETE_TIME = 180
 
-# 📝 Warning Message Template
+# 📝 Short Warning Message Template in Blockquote
 AUTO_DEL_TEXT = (
-    "⚠️ <b>Important Notice / ശ്രദ്ധിക്കുക</b>\n\n"
-    "To avoid copyright restrictions, This file will be automatically deleted In 3 min. Please forward it to your Saved Messages immediately to download without interruption!\n\n"    
-    "കോപ്പിറൈറ്റ് പ്രശ്നങ്ങൾ ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആയിപ്പോകും.. അതിനാൽ ഫയൽ ലഭിച്ച ഉടൻ തന്നെ നിങ്ങളുടെ Saved Messages-ലേക്ക് Forward ചെയ്ത് വെക്കുക!"
+    "<blockquote>⚠️ <b>This file will be deleted in 3 mins. Forward to Saved Messages now!</b>\n\n"
+    "<i>കോപ്പിറൈറ്റ് ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആകും. ഉടൻ തന്നെ Saved Messages-ലേക്ക് Forward ചെയ്യുക!</i></blockquote>"
 )
+
 
 
 # 🗑️ ബാക്ക്ഗ്രൗണ്ടിൽ മെസ്സേജുകൾ സുരക്ഷിതമായി ഡിലീറ്റ് ചെയ്യാനുള്ള ഫങ്ഷൻ
@@ -825,7 +825,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
         if not files_:
             return await query.answer('No such file exist.')
         
-        # 🟢 മാറ്റം വരുത്തിയത് ഇവിടെയാണ്: ലിസ്റ്റിലെ ആദ്യത്തെ ഫയൽ മാത്രം എടുക്കുന്നു
+        # 🟢 ലിസ്റ്റിലെ ആദ്യത്തെ ഫയൽ മാത്രം എടുക്കുന്നു
         files = files_[0] 
         
         title = files.file_name
@@ -842,27 +842,27 @@ async def cb_handler(client: Client, query: CallbackQuery):
 
         await query.answer()
         
+        # 🛠️ 'predvd' ഫയലുകൾ ആണെങ്കിൽ മാത്രം കാപ്ഷനിൽ Quote വാർണിങ് ചേർക്കുന്നു
+        is_predvd = title and any(keyword in title.lower() for keyword in ['predvd', 'predvdrip'])
+        if is_predvd:
+            final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
+        else:
+            final_caption = f_caption
+
         # 1. ഫയൽ അയക്കുന്നു
         xd = await client.send_cached_media(
             chat_id=query.from_user.id,
             file_id=file_id,
-            caption=f_caption,
+            caption=final_caption,
+            parse_mode=enums.ParseMode.HTML, # HTML മോഡ് നിർബന്ധമാണ്
             protect_content=True if ident == "checksubp" else False
         )
         
-        # 2. 'predvd' ഫയലുകൾ ആണെങ്കിൽ മാത്രം സെപ്പറേറ്റ് ടെക്സ്റ്റും ടൈമറും നൽകി ഓട്ടോ ഡിലീറ്റ് ചെയ്യുന്നു
-        if title and any(keyword in title.lower() for keyword in ['predvd', 'predvdrip']):
+        # 2. 'predvd' ഫയലുകൾ ആണെങ്കിൽ മാത്രം ഓട്ടോ ഡിലീറ്റ് ടാസ്ക് ട്രിഗർ ചെയ്യുന്നു (സെപ്പറേറ്റ് മെസ്സേജ് ഇല്ല)
+        if is_predvd:
             try:
-                # ടൈമർ ബട്ടൺ സഹിതമുള്ള സെപ്പറേറ്റ് മെസ്സേജ്
-                mins = int(AUTO_DELETE_TIME / 60)                            
-                warn_msg = await client.send_message(
-                    chat_id=query.from_user.id,
-                    text=AUTO_DEL_TEXT,                   
-                    parse_mode=enums.ParseMode.HTML
-                )
-                
-                # സുരക്ഷിതമായ നോൺ-ബ്ലോക്കിംഗ് ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി ഫയലും ടെക്സ്റ്റും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യുന്നു
-                asyncio.create_task(auto_delete_messages(client, query.from_user.id, [xd.id, warn_msg.id], AUTO_DELETE_TIME))
+                # ഫയൽ മെസ്സേജ് മാത്രം ഡിലീറ്റ് ചെയ്യാൻ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് നൽകുന്നു
+                asyncio.create_task(auto_delete_messages(client, query.from_user.id, [xd.id], AUTO_DELETE_TIME))
             except Exception as e:
                 logger.error(f"Error in checksub auto-delete: {e}")
 
