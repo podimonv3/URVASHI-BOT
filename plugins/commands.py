@@ -37,6 +37,19 @@ incol = indb['auto_del']
 infile = indb['file_reply_text']
 restarti = indb['restart']
 
+
+# ⏱️ Auto delete time in seconds (e.g., 600 seconds = 10 minutes)
+AUTO_DELETE_TIME = 180
+
+# 📝 Warning Message Template
+AUTO_DEL_TEXT = (
+    "⚠️ <b>Important Notice / ശ്രദ്ധിക്കുക</b>\n\n"
+    "To avoid copyright restrictions, This file will be automatically deleted In 3 min. Please forward it to your Saved Messages immediately to download without interruption!\n\n"    
+    "കോപ്പിറൈറ്റ് പ്രശ്നങ്ങൾ ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആയിപ്പോകും.. അതിനാൽ ഫയൽ ലഭിച്ച ഉടൻ തന്നെ നിങ്ങളുടെ Saved Messages-ലേക്ക് Forward ചെയ്ത് വെക്കുക!"
+)
+
+
+
 async def admin_check(message: Message) -> bool:
     if not message.from_user: return False
     if message.chat.type not in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]: return False
@@ -58,7 +71,24 @@ def convert_time_to_seconds(time_str):
         return int(time_str[:-1]) * 3600
     else:
         return 0
-        
+
+
+
+# 🗑️ Function to delete messages safely after delay
+async def auto_delete_messages(client, chat_id, message_ids, delay):
+    await asyncio.sleep(delay)
+    for msg_id in message_ids:
+        try:
+            await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
+        except FloodWait as e:
+            await asyncio.sleep(e.x)
+            try:
+                await client.delete_messages(chat_id=chat_id, message_ids=msg_id)
+            except Exception: pass
+        except Exception: pass
+
+
+
 async def send_file(client, query, ident, file_id):
     from pyrogram.errors import UserIsBlocked
     files_ = await get_file_details(file_id)
@@ -77,14 +107,26 @@ async def send_file(client, query, ident, file_id):
     if f_caption is None:
         f_caption = f"{title}"
 
-    # 🛠️ ഫിക്സ്: യൂസർ ബ്ലോക്ക് ചെയ്തിട്ടുണ്ടെങ്കിൽ എറർ അടിക്കാതിരിക്കാൻ try-except ചേർത്തു
     try:
+        # 1. Send File
         ok = await client.send_cached_media(
             chat_id=query.from_user.id,
             file_id=file_id,
             caption=f_caption,
             protect_content=True if ident == 'checksubp' else False
         )
+        
+        # 2. Send Separate Timer Message
+        mins = int(AUTO_DELETE_TIME / 60)        
+        warn_msg = await client.send_message(
+            chat_id=query.from_user.id,
+            text=AUTO_DEL_TEXT,            
+            parse_mode=enums.ParseMode.HTML
+        )
+        
+        # 3. Trigger Auto Delete Task
+        asyncio.create_task(auto_delete_messages(client, query.from_user.id, [ok.id, warn_msg.id], AUTO_DELETE_TIME))
+        
     except UserIsBlocked:
         logger.warning(f"യൂസർ ({query.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫയൽ അയക്കാൻ കഴിഞ്ഞില്ല.")
     except Exception as e:
@@ -382,7 +424,15 @@ async def start(client, message):
                     f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption, mention=message.from_user.mention)    
                 except:
                     return
-            await msg.edit_caption(f_caption)
+            await msg.edit_caption(f_caption)            
+            # Send Separate Timer Message
+            mins = int(AUTO_DELETE_TIME / 60)            
+            warn_msg = await client.send_message(
+                chat_id=message.from_user.id,
+                text=AUTO_DEL_TEXT,                
+                parse_mode=enums.ParseMode.HTML
+            )
+            asyncio.create_task(auto_delete_messages(client, message.from_user.id, [msg.id, warn_msg.id], AUTO_DELETE_TIME))
             return
         except UserIsBlocked:
             logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. കാഷെഡ് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
@@ -413,11 +463,19 @@ async def start(client, message):
             caption=f_caption,
             protect_content=True if pre == 'filep' else False
         )
+        
+        # Send Separate Timer Message
+        mins = int(AUTO_DELETE_TIME / 60)        
+        warn_msg = await client.send_message(
+            chat_id=message.from_user.id,
+            text=AUTO_DEL_TEXT,            
+            parse_mode=enums.ParseMode.HTML
+        )
+        asyncio.create_task(auto_delete_messages(client, message.from_user.id, [xd.id, warn_msg.id], AUTO_DELETE_TIME))
     except UserIsBlocked:
-        logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫയൽ അയക്കാൻ കഴിഞ്ഞില്ല.")
+        logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു.")
     except Exception as e:
         logger.error(f"മെസ്സേജ് അയക്കുന്നതിൽ പരാജയപ്പെട്ടു: {e}")
-
 
     
     
