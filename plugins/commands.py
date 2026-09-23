@@ -389,8 +389,9 @@ async def start(client, message):
         async for msg in client.iter_messages(int(f_chat_id), int(l_msg_id), int(f_msg_id)):
             copied_msg = None
             if msg.media:
-                media_type = msg.media.value if hasattr(msg.media, "value") else msg.media
-                media = getattr(msg, media_type, None)
+                # 🛠️ ഫിക്സ്: Enum/None മൂലമുണ്ടാകുന്നTypeError ഒഴിവാക്കാൻ സ്ട്രിങ് വാല്യൂ കൃത്യമായി എടുക്കുന്നു
+                media_type = msg.media.value if hasattr(msg.media, "value") else str(msg.media)
+                media = getattr(msg, media_type, None) if media_type else None
                 
                 if media:
                     if BATCH_FILE_CAPTION:
@@ -456,6 +457,7 @@ async def start(client, message):
                 
         return await sts.delete()
 
+
         
     files_ = await get_file_details(file_id)           
     if not files_:
@@ -466,8 +468,17 @@ async def start(client, message):
                 file_id=file_id,
                 protect_content=True if pre == 'filep' else False,
                 )
-            filetype = msg.media
-            file = getattr(msg, filetype)
+            
+            # 🛠️ ഫിക്സ്: Enum/None എറർ വരാതിരിക്കാൻ സ്ട്രിങ് വാല്യൂവിലേക്ക് മാറ്റുന്നു
+            if msg.media:
+                filetype = msg.media.value if hasattr(msg.media, "value") else str(msg.media)
+                file = getattr(msg, filetype, None)
+            else:
+                file = None
+
+            if not file:
+                return await message.reply('No such file exist.')
+
             title = file.file_name
             size=get_size(file.file_size)
             f_caption = f"<code>{title}</code>"
@@ -528,6 +539,7 @@ async def start(client, message):
         logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു.")
     except Exception as e:
         logger.error(f"മെസ്സേജ് അയക്കുന്നതിൽ പരാജയപ്പെട്ടു: {e}")
+
 
     
     
