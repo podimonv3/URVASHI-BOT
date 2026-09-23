@@ -166,7 +166,7 @@ async def pm_text(bot: Client, message):
             await message.reply_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
 
 
-    # സിനിമ ഡാറ്റാബേസിൽ നിന്ന് കിട്ടിയിട്ടില്ലെങ്കിലോ അല്ലെങ്കിൽ ഇതൊരു മീഡിയ ഫയൽ ആണെങ്കിലോ പഴയ റിപ്ലൈ നൽകും
+    # സിനിമ ഡാറ്റാബേസിലോ അല്ലെങ്കിൽ ഇതൊരു മീഡിയ ഫയൽ ആണെങ്കിലോ പഴയ റിപ്ലൈ നൽകും
     if not files_found:
         await bot.send_chat_action(chat_id=message.chat.id, action=enums.ChatAction.TYPING)
         await asyncio.sleep(0.5)
@@ -186,32 +186,32 @@ async def pm_text(bot: Client, message):
             except: pass
         asyncio.create_task(auto_delete())
 
-    # ----------------------------------------------------
-    # 📢 LOG CHANNEL SECTION (എല്ലാ ശരിയായ റിക്വസ്റ്റുകളും ലോഗ് ചെയ്യുന്നു)
-    # ----------------------------------------------------
-    log_reply_markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 MESSAGE USER (DIRECT)", url=f"tg://user?id={user_id}")]
-    ])
-    
-    # സിനിമ ഡാറ്റാബേസിൽ ഉണ്ടോ ഇല്ലയോ എന്ന സ്റ്റാറ്റസ് കൂടി ലോഗ് ടെക്സ്റ്റിൽ കാണിക്കുന്നു
-    status_tag = " [FOUND IN DB 📁]" if files_found else " [NOT FOUND IN DB ❌]"
-    log_text = f"<b>#PM_MSG{status_tag}\n\nNᴀᴍᴇ : <a href='tg://user?id={user_id}'>{user}</a>\n\nID : <code>{user_id}</code>\n\nMᴇssᴀɢᴇ :</b> <code>{content}</code>\n\n#id{user_id}"
-    
-    try:
-        if message.photo:
-            await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.UPLOAD_PHOTO)
-            await bot.send_photo(chat_id=LOG_CHANNEL, photo=message.photo.file_id, caption=log_text, reply_markup=log_reply_markup)
-        elif message.video:
-            await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.UPLOAD_VIDEO)
-            await bot.send_video(chat_id=LOG_CHANNEL, video=message.video.file_id, caption=log_text, reply_markup=log_reply_markup)
-        elif message.sticker:
-            await bot.send_message(chat_id=LOG_CHANNEL, text=log_text, reply_markup=log_reply_markup, disable_web_page_preview=True)
-            await bot.send_sticker(chat_id=LOG_CHANNEL, sticker=message.sticker.file_id)
-        else:
-            await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.TYPING)
-            await bot.send_message(chat_id=LOG_CHANNEL, text=log_text, reply_markup=log_reply_markup, disable_web_page_preview=True)
-    except Exception as e:
-        logger.error(f"Error sending log to LOG_CHANNEL: {e}")
+        # ----------------------------------------------------
+        # 📢 LOG CHANNEL SECTION (ഡാറ്റാബേസിൽ ഇല്ലാത്തപ്പോൾ മാത്രം ലോഗ് ചെയ്യുന്നു)
+        # ----------------------------------------------------
+        log_reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💬 MESSAGE USER (DIRECT)", url=f"tg://user?id={user_id}")]
+        ])
+        
+        # ലോഗ് ടെക്സ്റ്റിൽ നിന്നും FOUND / NOT FOUND ടാഗുകൾ പൂർണ്ണമായി ഒഴിവാക്കി
+        log_text = f"<b>#PM_MSG\n\nNᴀᴍᴇ : <a href='tg://user?id={user_id}'>{user}</a>\n\nID : <code>{user_id}</code>\n\nMᴇssᴀɢᴇ :</b> <code>{content}</code>\n\n#id{user_id}"
+        
+        try:
+            if message.photo:
+                await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.UPLOAD_PHOTO)
+                await bot.send_photo(chat_id=LOG_CHANNEL, photo=message.photo.file_id, caption=log_text, reply_markup=log_reply_markup)
+            elif message.video:
+                await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.UPLOAD_VIDEO)
+                await bot.send_video(chat_id=LOG_CHANNEL, video=message.video.file_id, caption=log_text, reply_markup=log_reply_markup)
+            elif message.sticker:
+                await bot.send_message(chat_id=LOG_CHANNEL, text=log_text, reply_markup=log_reply_markup, disable_web_page_preview=True)
+                await bot.send_sticker(chat_id=LOG_CHANNEL, sticker=message.sticker.file_id)
+            else:
+                await bot.send_chat_action(chat_id=LOG_CHANNEL, action=enums.ChatAction.TYPING)
+                await bot.send_message(chat_id=LOG_CHANNEL, text=log_text, reply_markup=log_reply_markup, disable_web_page_preview=True)
+        except Exception as e:
+            logger.error(f"Error sending log to LOG_CHANNEL: {e}")
+
 
 
 
