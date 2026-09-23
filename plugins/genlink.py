@@ -31,7 +31,7 @@ async def gen_link_s(bot, message):
     if message.has_protected_content and message.chat.id not in ADMINS:
         return await message.reply("okDa")
     file_id, ref = unpack_new_file_id((getattr(replied, file_type.value)).file_id)
-    string = 'filep_' if message.text.lower().strip() == "/plink" else 'file_'
+    string = 'filep_'
     string += file_id
     outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
     await message.reply(f"Here is your Link:\n<code>https://t.me/{temp.U_NAME}?start={outstr}</code>")
@@ -105,7 +105,7 @@ async def gen_link_batch(bot, message):
                     "caption": caption,
                     "title": getattr(file, "file_name", ""),
                     "size": file.file_size,
-                    "protect": cmd.lower().strip() == "/pbatch",
+                    "protect": True,
                 }
 
                 og_msg +=1
