@@ -912,6 +912,19 @@ async def cb_handler(client: Client, query: CallbackQuery):
         stats3 = await clientDB3.command('dbStats')
         used_dbSize3 = (stats3['dataSize']/(1024*1024))+(stats3['indexSize']/(1024*1024))
         free_dbSize3 = 512-used_dbSize3        
+
+        # 🖥️ Koyeb CPU, RAM & Disk കണക്കുകൾ എടുക്കുന്നു
+        import psutil
+        import shutil
+        
+        cpu_usage = psutil.cpu_percent(interval=0.1)
+        ram = psutil.virtual_memory()
+        ram_usage = ram.percent
+        ram_used_mb = round(ram.used / (1024 * 1024), 2)
+        ram_total_mb = round(ram.total / (1024 * 1024), 2)
+        
+        total_d, used_d, free_d = shutil.disk_usage("/")
+        disk_usage = round((used_d / total_d) * 100, 2)
         
         stats_text = (
             "📊 <b>Bot Statistics</b>\n\n"
@@ -920,9 +933,13 @@ async def cb_handler(client: Client, query: CallbackQuery):
             f"▪️ DB 2 Files (Mediaa): {tota}\n\n"
             f"▪️ Total Users: {users}\n"
             f"▪️ Total Chats: {chats}\n\n"
-            f"🗄 Database 1 Size: {round(used_dbSize2, 2)} MB / Free: {round(free_dbSize2, 2)} MB\n"
-            f"🗄 Database 2 Size: {round(used_dbSize3, 2)} MB / Free: {round(free_dbSize3, 2)} MB\n"
-            f"🗄 Database 3 Size: {round(used_dbSize, 2)} MB / Free: {round(free_dbSize, 2)} MB"
+            f"🗄 Database 1 Size: {round(used_dbSize, 2)} MB / Free: {round(free_dbSize, 2)} MB\n"
+            f"🗄 Database 2 Size: {round(used_dbSize2, 2)} MB / Free: {round(free_dbSize2, 2)} MB\n"
+            f"🗄 Database 3 Size: {round(used_dbSize3, 2)} MB / Free: {round(free_dbSize3, 2)} MB\n\n"
+            f"🖥 <b>Koyeb Server Status:</b>\n"
+            f"⚙️ CPU Usage: {cpu_usage}%\n"
+            f"🧠 RAM Usage: {ram_usage}% ({ram_used_mb} MB / {ram_total_mb} MB)\n"
+            f"💽 Disk Space: {disk_usage}%\n"
         )
         
         # 🛠️ എറർ ഒഴിവാക്കാനായി വരുത്തിയ മാറ്റം:
@@ -940,6 +957,7 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 reply_markup=reply_markup,
                 parse_mode=enums.ParseMode.HTML
             )
+
 
     
 async def auto_filter(client, msg, spoll=False):
