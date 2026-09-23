@@ -34,10 +34,10 @@ async def gen_link_s(bot, message):
     string = 'filep_' if message.text.lower().strip() == "/plink" else 'file_'
     string += file_id
     outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
-    await message.reply(f"Here is your Link:\nhttps://t.me/{temp.U_NAME}?start={outstr}")
+    await message.reply(f"Here is your Link:\n<code>https://t.me/{temp.U_NAME}?start={outstr}</code>")
     
     
-@Client.on_message(filters.command(['batch', 'pbatch']) & filters.create(allowed))
+@Client.on_message(filters.command(['b', 'p']) & filters.create(allowed))
 async def gen_link_batch(bot, message):
     if " " not in message.text:
         return await message.reply("Use correct format.\nExample <code>/batch https://t.me/sources_cods/10 https://t.me/sources_cods/20</code>.")
@@ -45,7 +45,7 @@ async def gen_link_batch(bot, message):
     if len(links) != 3:
         return await message.reply("Use correct format.\nExample <code>/batch https://t.me/sources_cods/10 https://t.me/sources_cods/20</code>.")
     cmd, first, last = links
-    regex = re.compile("(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
+    regex = re.compile(r"(https://)?(t\.me/|telegram\.me/|telegram\.dog/)(c/)?(\d+|[a-zA-Z_0-9]+)/(\d+)$")
     match = regex.match(first)
     if not match:
         return await message.reply('Invalid link')
@@ -77,7 +77,7 @@ async def gen_link_batch(bot, message):
     if chat_id in FILE_STORE_CHANNEL:
         string = f"{f_msg_id}_{l_msg_id}_{chat_id}_{cmd.lower().strip()}"
         b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
-        return await sts.edit(f"Here is your link https://t.me/{temp.U_NAME}?start=DSTORE-{b_64}")
+        return await sts.edit(f"Here is your link <code> https://t.me/{temp.U_NAME}?start=DSTORE-{b_64}</code>")
 
     FRMT = "Generating Link...\nTotal Messages: `{total}`\nDone: `{current}`\nRemaining: `{rem}`\nStatus: `{sts}`"
 
@@ -119,7 +119,7 @@ async def gen_link_batch(bot, message):
                 pass
     with open(f"batchmode_{message.from_user.id}.json", "w+") as out:
         json.dump(outlist, out)
-    post = await bot.send_document(LOG_CHANNEL, f"batchmode_{message.from_user.id}.json", file_name="Batch.json", caption="⚠️Generated for filestore.")
+    post = await bot.send_document(FILE_STORE_CHANNEL, f"batchmode_{message.from_user.id}.json", file_name="Batch.json", caption="⚠️Generated for filestore.")
     os.remove(f"batchmode_{message.from_user.id}.json")
     file_id, ref = unpack_new_file_id(post.document.file_id)
-    await sts.edit(f"Here is your link\nContains `{og_msg}` files.\n https://t.me/{temp.U_NAME}?start=BATCH-{file_id}")
+    await sts.edit(f"Here is your link\nContains `{og_msg}` files.\n <code> https://t.me/{temp.U_NAME}?start=BATCH-{file_id}</code>")
