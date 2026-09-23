@@ -1035,20 +1035,26 @@ async def auto_filter(client, msg, spoll=False):
 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[[btn_google], [btn_rules, btn_request]])                
                 try:
-                    await msg.reply_photo(
+                    # 📸 ഗൂഗിൾ ഫോട്ടോ സഹിതമുള്ള സ്പെൽ ചെക്ക് മെസ്സേജ് അയക്കുന്നു
+                    spell_msg = await msg.reply_photo(
                         photo="https://files.catbox.moe/yt159d.jpg",
                         caption=script.SPELL_TEXT.format(msg.from_user.mention),
                         reply_markup=keyboard,
                         parse_mode=enums.ParseMode.HTML
                     )
+                    # 🗑️ നോൺ-ബ്ലോക്കിംഗ് ടാസ്ക് വഴി 60 സെക്കൻഡിന് ശേഷം ഈ മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു
+                    asyncio.create_task(auto_delete_messages(client, msg.chat.id, [spell_msg.id], 30))
                     return       
                 except Exception:
                     try:
-                        await msg.reply_text(
+                        # 📝 ഫോട്ടോ സെർവറിൽ ലോഡ് ആയില്ലെങ്കിൽ സാധാരണ ടെക്സ്റ്റ് മെസ്സേജ് അയക്കുന്നു
+                        spell_msg = await msg.reply_text(
                             text=script.SPELL_TEXT.format(msg.from_user.mention), 
                             reply_markup=keyboard,
                             parse_mode=enums.ParseMode.HTML
                         )
+                        # 🗑️ ഈ ടെക്സ്റ്റ് മെസ്സേജും 60 സെക്കൻഡിനുള്ളിൽ തനിയെ ഡിലീറ്റ് ആകും
+                        asyncio.create_task(auto_delete_messages(client, msg.chat.id, [spell_msg.id], 30))
                         return
                     except Exception: return
         else: return
