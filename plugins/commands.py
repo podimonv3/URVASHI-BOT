@@ -41,12 +41,13 @@ restarti = indb['restart']
 # ⏱️ Auto delete time in seconds (e.g., 600 seconds = 10 minutes)
 AUTO_DELETE_TIME = 180
 
-# 📝 Warning Message Template
+# 📝 Short Warning Message Template in Blockquote
 AUTO_DEL_TEXT = (
-    "⚠️ <b>Important Notice / ശ്രദ്ധിക്കുക</b>\n\n"
-    "To avoid copyright restrictions, This file will be automatically deleted In 3 min. Please forward it to your Saved Messages immediately to download without interruption!\n\n"    
-    "കോപ്പിറൈറ്റ് പ്രശ്നങ്ങൾ ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആയിപ്പോകും.. അതിനാൽ ഫയൽ ലഭിച്ച ഉടൻ തന്നെ നിങ്ങളുടെ Saved Messages-ലേക്ക് Forward ചെയ്ത് വെക്കുക!"
+    "<blockquote>⚠️ <b>This file will be deleted in 3 mins. Forward to Saved Messages now!</b>\n\n"
+    "<i>കോപ്പിറൈറ്റ് ഒഴിവാക്കാൻ ഈ ഫയൽ 3 മിനിറ്റിനുള്ളിൽ ഡിലീറ്റ് ആകും. ഉടൻ തന്നെ Saved Messages-ലേക്ക് Forward ചെയ്യുക!</i></blockquote>"
 )
+
+
 
 
 
@@ -107,25 +108,21 @@ async def send_file(client, query, ident, file_id):
     if f_caption is None:
         f_caption = f"{title}"
 
+    # 🛠️ കാപ്ഷന്റെ കൂടെ ഓട്ടോ ഡിലീറ്റ് ടെക്സ്റ്റ് Quote ആയി ചേർക്കുന്നു
+    final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
+
     try:
-        # 1. Send File
+        # 1. Send File with quote caption
         ok = await client.send_cached_media(
             chat_id=query.from_user.id,
             file_id=file_id,
-            caption=f_caption,
+            caption=final_caption,
+            parse_mode=enums.ParseMode.HTML,
             protect_content=True if ident == 'checksubp' else False
         )
         
-        # 2. Send Separate Timer Message
-        mins = int(AUTO_DELETE_TIME / 60)        
-        warn_msg = await client.send_message(
-            chat_id=query.from_user.id,
-            text=AUTO_DEL_TEXT,            
-            parse_mode=enums.ParseMode.HTML
-        )
-        
-        # 3. Trigger Auto Delete Task
-        asyncio.create_task(auto_delete_messages(client, query.from_user.id, [ok.id, warn_msg.id], AUTO_DELETE_TIME))
+        # 2. Trigger Auto Delete Task (ഫയൽ മെസ്സേജ് ഐഡി മാത്രം പാസ്സ് ചെയ്യുന്നു)
+        asyncio.create_task(auto_delete_messages(client, query.from_user.id, [ok.id], AUTO_DELETE_TIME))
         
     except UserIsBlocked:
         logger.warning(f"യൂസർ ({query.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. ഫയൽ അയക്കാൻ കഴിഞ്ഞില്ല.")
@@ -277,6 +274,7 @@ async def start(client, message):
         pre = ""
         
     from pyrogram.errors import UserIsBlocked
+
     
     if data.split("-", 1)[0] == "BATCH":
         try:
@@ -313,11 +311,16 @@ async def start(client, message):
                     f_caption=f_caption
             if f_caption is None:
                 f_caption = f"{title}"
+            
+            # 🛠️ ഫയൽ കാപ്ഷന്റെ കൂടെ ഓട്ടോ ഡിലീറ്റ് ടെക്സ്റ്റ് Quote ആയി ചേർക്കുന്നു
+            final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
+            
             try:
                 b_msg = await client.send_cached_media(
                     chat_id=message.from_user.id,
                     file_id=msg.get("file_id"),
-                    caption=f_caption,
+                    caption=final_caption,
+                    parse_mode=enums.ParseMode.HTML, # HTML എങ്കിൽ മാത്രമേ blockquote വർക്ക് ചെയ്യൂ
                     protect_content=msg.get('protect', False),
                     )
                 if b_msg:
@@ -329,7 +332,8 @@ async def start(client, message):
                     b_msg = await client.send_cached_media(
                         chat_id=message.from_user.id,
                         file_id=msg.get("file_id"),
-                        caption=f_caption,
+                        caption=final_caption,
+                        parse_mode=enums.ParseMode.HTML,
                         protect_content=msg.get('protect', False),
                         )
                     if b_msg:
@@ -346,25 +350,18 @@ async def start(client, message):
                 continue
             await asyncio.sleep(1) 
             
-        # ⏳ ബാച്ച് ഫയലുകൾ എല്ലാം അയച്ചു കഴിഞ്ഞാൽ സെപ്പറേറ്റ് ടൈമർ ടെക്സ്റ്റ് അയക്കുന്നു
+        # ⏳ ബാച്ച് ഫയലുകൾ ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു (സെപ്പറേറ്റ് വാർണിംഗ് മെസ്സേജ് ഒഴിവാക്കി)
         if batch_msg_ids:
             try:
-                mins = int(AUTO_DELETE_TIME / 60)              
-                warn_msg = await client.send_message(
-                    chat_id=message.from_user.id,
-                    text=AUTO_DEL_TEXT,                    
-                    parse_mode=enums.ParseMode.HTML
-                )
-                batch_msg_ids.append(warn_msg.id) # വാർണിംഗ് മെസ്സേജ് ഐഡിയും ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
-                
                 # 🗑️ സുരക്ഷിതമായ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി എല്ലാ ഫയലുകളും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു
                 asyncio.create_task(auto_delete_messages(client, message.from_user.id, batch_msg_ids, AUTO_DELETE_TIME))
             except Exception as e:
-                logger.error(f"Error in BATCH auto-delete text: {e}")
+                logger.error(f"Error in BATCH auto-delete task: {e}")
                 
         try: await sts.delete()
         except: pass
         return
+
 
         
     elif data.split("-", 1)[0] == "DSTORE":
@@ -403,14 +400,17 @@ async def start(client, message):
                     else:
                         file_name = getattr(media, 'file_name', '')
                         f_caption = getattr(msg, 'caption', file_name)
+                    
+                    # 🛠️ ഫയൽ കാപ്ഷന്റെ കൂടെ ഓട്ടോ ഡിലീറ്റ് ടെക്സ്റ്റ് Quote ആയി ചേർക്കുന്നു
+                    final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
                         
                     try:
-                        copied_msg = await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        copied_msg = await msg.copy(message.chat.id, caption=final_caption, parse_mode=enums.ParseMode.HTML, protect_content=True if protect == "/pbatch" else False)
                         if copied_msg:
                             dstore_msg_ids.append(copied_msg.id)
                     except FloodWait as e:
                         await asyncio.sleep(e.x)
-                        copied_msg = await msg.copy(message.chat.id, caption=f_caption, protect_content=True if protect == "/pbatch" else False)
+                        copied_msg = await msg.copy(message.chat.id, caption=final_caption, parse_mode=enums.ParseMode.HTML, protect_content=True if protect == "/pbatch" else False)
                         if copied_msg:
                             dstore_msg_ids.append(copied_msg.id)
                     except UserIsBlocked:
@@ -422,6 +422,7 @@ async def start(client, message):
             elif msg.empty:
                 continue
             else:
+                # മീഡിയ അല്ലാത്ത സാധാ ടെക്സ്റ്റ് മെസ്സേജുകൾക്ക് ഇവിടെ ഫോട്ടോ കാപ്ഷൻ പോലെ ചെയ്യാൻ പറ്റാത്തതിനാൽ പഴയ രീതിയിൽ കോപ്പി ചെയ്യുന്നു
                 try:
                     copied_msg = await msg.copy(message.chat.id, protect_content=True if protect == "/pbatch" else False)
                     if copied_msg:
@@ -439,23 +440,16 @@ async def start(client, message):
                     continue
             await asyncio.sleep(1) 
             
-        # ⏳ ഫയലുകൾ കോപ്പി ചെയ്ത് കഴിഞ്ഞാൽ സെപ്പറേറ്റ് ടൈമർ ടെക്സ്റ്റ് അയക്കുന്നു
+        # ⏳ ഫയലുകൾ കോപ്പി ചെയ്ത് കഴിഞ്ഞാൽ ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു (സെപ്പറേറ്റ് വാർണിംഗ് മെസ്സേജ് ഒഴിവാക്കി)
         if dstore_msg_ids:
             try:
-                mins = int(AUTO_DELETE_TIME / 60)                
-                warn_msg = await client.send_message(
-                    chat_id=message.chat.id,
-                    text=AUTO_DEL_TEXT,                    
-                    parse_mode=enums.ParseMode.HTML
-                )
-                dstore_msg_ids.append(warn_msg.id) # വാർണിംഗ് മെസ്സേജ് ഐഡിയും ലിസ്റ്റിലേക്ക് ചേർക്കുന്നു
-                
                 # 🗑️ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി എല്ലാ ഫയലുകളും ഒന്നിച്ച് ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു
                 asyncio.create_task(auto_delete_messages(client, message.chat.id, dstore_msg_ids, AUTO_DELETE_TIME))
             except Exception as e:
-                logger.error(f"Error in DSTORE auto-delete text: {e}")
+                logger.error(f"Error in DSTORE auto-delete task: {e}")
                 
         return await sts.delete()
+
 
 
         
@@ -487,15 +481,13 @@ async def start(client, message):
                     f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption, mention=message.from_user.mention)    
                 except:
                     return
-            await msg.edit_caption(f_caption)            
-            # Send Separate Timer Message
-            mins = int(AUTO_DELETE_TIME / 60)            
-            warn_msg = await client.send_message(
-                chat_id=message.from_user.id,
-                text=AUTO_DEL_TEXT,                
-                parse_mode=enums.ParseMode.HTML
-            )
-            asyncio.create_task(auto_delete_messages(client, message.from_user.id, [msg.id, warn_msg.id], AUTO_DELETE_TIME))
+            
+            # 🛠️ സിംഗിൾ കാഷെ ഫയൽ കാപ്ഷൻ എഡിറ്റ് ചെയ്യുമ്പോൾ വാർണിങ് Quote ആയി ചേർക്കുന്നു
+            final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
+            await msg.edit_caption(final_caption, parse_mode=enums.ParseMode.HTML)            
+            
+            # ഫയൽ മാത്രം ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു (സെപ്പറേറ്റ് വാർണിങ് മെസ്സേജ് ഒഴിവാക്കി)
+            asyncio.create_task(auto_delete_messages(client, message.from_user.id, [msg.id], AUTO_DELETE_TIME))
             return
         except UserIsBlocked:
             logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു. കാഷെഡ് മീഡിയ അയക്കാൻ കഴിഞ്ഞില്ല.")
@@ -518,23 +510,20 @@ async def start(client, message):
     if f_caption is None:
         f_caption = f"{title}"
 
-    # 🛠️ ഫിക്സ്: യൂസർ ബ്ലോക്ക് ചെയ്തിട്ടുണ്ടെങ്കിൽ തനിയെ സ്കിപ്പ് ചെയ്യാനുള്ള try-except ചേർത്തു
+    # 🛠️ സാധാരണ ഫയൽ അയക്കുമ്പോഴും കാപ്ഷന്റെ കൂടെ ഓട്ടോ ഡിലീറ്റ് ടെക്സ്റ്റ് Quote ആയി ചേർക്കുന്നു
+    final_caption = f"{f_caption}\n\n{AUTO_DEL_TEXT}"
+
     try:
         xd = await client.send_cached_media(
             chat_id=message.from_user.id,
             file_id=file_id,
-            caption=f_caption,
+            caption=final_caption,
+            parse_mode=enums.ParseMode.HTML,
             protect_content=True if pre == 'filep' else False
         )
         
-        # Send Separate Timer Message
-        mins = int(AUTO_DELETE_TIME / 60)        
-        warn_msg = await client.send_message(
-            chat_id=message.from_user.id,
-            text=AUTO_DEL_TEXT,            
-            parse_mode=enums.ParseMode.HTML
-        )
-        asyncio.create_task(auto_delete_messages(client, message.from_user.id, [xd.id, warn_msg.id], AUTO_DELETE_TIME))
+        # ഫയൽ മാത്രം ഡിലീറ്റ് ചെയ്യാൻ നൽകുന്നു
+        asyncio.create_task(auto_delete_messages(client, message.from_user.id, [xd.id], AUTO_DELETE_TIME))
     except UserIsBlocked:
         logger.warning(f"യൂസർ ({message.from_user.id}) ബോട്ടിനെ ബ്ലോക്ക് ചെയ്തിരിക്കുന്നു.")
     except Exception as e:
