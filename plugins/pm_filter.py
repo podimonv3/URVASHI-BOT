@@ -25,6 +25,8 @@ from database.filters_mdb import (
 )
 from database.gfilters_mdb import find_gfilter, get_gfilters
 import logging
+from database.requests_db import save_missing_movie, get_all_missing_movies
+import io
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.ERROR)
@@ -1036,6 +1038,9 @@ async def auto_filter(client, msg, spoll=False):
                 keywords = await get_gfilters('gfilters')
                 if any(re.match(r"^" + re.escape(k.strip().lower()) + r"$", search.lower()) for k in keywords):
                     return  # 👈 ഗ്ലോബൽ ഫിൽട്ടറിൽ ഉണ്ടെങ്കിൽ സ്പെൽ ചെക്ക് അയക്കാതെ ഇവിടെ വെച്ച് അവസാനിപ്പിക്കുന്നു!
+
+                await save_missing_movie(search)
+                
                 reqst_gle = search.replace(" ", "+")
                 btn_google = InlineKeyboardButton("🔎 𝗖𝗼𝗿𝗿𝗲𝗰𝘁 𝗦𝗽𝗲𝗹𝗹𝗶𝗻𝗴 (𝖦𝗈𝗈𝗀𝗅𝖾) 🔍", url=f"https://www.google.com/search?q={reqst_gle}")
                 btn_rules = InlineKeyboardButton("📜 Rᴜʟᴇs", url="http://telegra.ph/Request-%E0%B4%85%E0%B4%AF%E0%B4%95%E0%B4%95-%E0%B4%AE%E0%B4%A8%E0%B4%A8-%E0%B4%B5%E0%B4%AF%E0%B4%95%E0%B4%95%E0%B4%A3%E0%B4%9F%E0%B4%A8%E0%B4%A8%E0%B4%A4-08-19")
