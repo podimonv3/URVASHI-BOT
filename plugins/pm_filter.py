@@ -289,13 +289,13 @@ async def admin_reply_to_user(bot: Client, message):
 
 @Client.on_message(filters.text & filters.incoming)
 async def give_filters(client, message):
-    # രണ്ട് ഫങ്ക്ഷനുകളും ഒരേ സമയം ബാക്ക്ഗ്രൗണ്ടിൽ റൺ ചെയ്യാൻ ടാസ്കുകൾ ഉണ്ടാക്കുന്നു
-    task1 = asyncio.create_task(global_filters(client, message))
-    task2 = asyncio.create_task(auto_filter(client, message))
+    # 1. ആദ്യം കസ്റ്റം ഫിൽട്ടർ (Global Filter) ഉണ്ടോ എന്ന് പരിശോധിക്കുന്നു
+    g_filter = await global_filters(client, message)
     
-    # രണ്ട് ടാസ്കുകളും ഒരുമിച്ച് (Parallel ആയി) എക്സിക്യൂട്ട് ചെയ്യുന്നു
-    # return_exceptions=True നൽകിയാൽ ഒരെണ്ണത്തിൽ എറർ വന്നാലും മറ്റേത് കൃത്യമായി വർക്ക് ചെയ്യും
-    await asyncio.gather(task1, task2, return_exceptions=True)
+    # 2. ഗ്ലോബൽ ഫിൽട്ടർ ഇല്ലെങ്കിൽ മാത്രം (False ആണെങ്കിൽ) മൂവി ഓട്ടോ ഫിൽട്ടർ വർക്ക് ചെയ്യിക്കുന്നു
+    # ഇതിലൂടെ ഗ്ലോബൽ ഫിൽട്ടർ ഉള്ള സിനിമകൾക്ക് ഒരിക്കലും സ്പെൽ ചെക്ക് വരില്ല!
+    if not g_filter:
+        await auto_filter(client, message)
 
         
 @Client.on_callback_query(filters.regex(r"^next"))
@@ -1224,6 +1224,7 @@ async def global_filters(client, message, text=False):
                         
                 except Exception as e:
                     logger.exception(e)
-                break
+                
+                return True  # 👈 ഇവിടെ 'break'-ന് പകരം 'return True' എന്ന് നൽകി
     else:
         return False
