@@ -3,6 +3,8 @@ import logging
 import random
 import sys
 import asyncio
+import io  # ലോഗ് ഫയൽ (Text File) ഇൻ-മെമ്മറി ആയി നിർമ്മിക്കാൻ
+from database.requests_db import get_all_missing_movies  # നമ്മൾ ഉണ്ടാക്കിയ പുതിയ DB ഫങ്ക്ഷൻ
 from Script import script
 from pyrogram import Client, filters, enums
 from pyrogram.errors import ChatAdminRequired, FloodWait, MessageDeleteForbidden
@@ -843,3 +845,37 @@ async def delete_duplicate_files(client, message):
     
     # Send a final message indicating the total number of duplicates deleted
     await message.reply(f"Deleted {deleted_count} duplicate files. in {batch_size} batches")
+
+
+
+
+@Client.on_message(filters.command("missing") & filters.user(ADMINS))
+async def get_missing_requests(bot: Client, message):
+    await bot.send_chat_action(chat_id=message.chat.id, action=enums.ChatAction.TYPING)
+    
+    # ഡാറ്റാബേസിൽ നിന്നും സിനിമകളും കൗണ്ടുകളും എടുക്കുന്നു
+    missing_movies = await get_all_missing_movies()
+    
+    if not missing_movies:
+        return await message.reply_text("<b>❌ നിലവിൽ ഡാറ്റാബേസിൽ കിട്ടാത്ത സിനിമകളുടെ ലിസ്റ്റ് ഒന്നും തന്നെയില്ല!</b>")
+    
+    # ലോഗ് ഫയലിനായുള്ള ടെക്സ്റ്റ് ഫോർമാറ്റ് ചെയ്യുന്നു
+    log_content = " Can_Urvashi Theaters™️ - Missing Movie Requests (With Count) \n"
+    log_content += f"Total Unique Requests: {len(missing_movies)}\n"
+    log_content += "="*65 + "\n\n"
+    
+    # Alphabetical order-ൽ കൗണ്ട് സഹിതം ലിസ്റ്റ് ചെയ്യുന്നു
+    for index, movie in enumerate(missing_movies, start=1):
+        log_content += f"{index}. {movie['name'].ljust(40)} | Searches: {movie['count']} times\n"
+        
+    # ടെക്സ്റ്റ് ഡാറ്റയെ ഒരു ഇൻ-മെമ്മറി ഫയൽ (BytesIO) ആക്കി മാറ്റുന്നു
+    file_buffer = io.BytesIO(log_content.encode('utf-8'))
+    file_buffer.name = "missing_movies_log.txt"
+    
+    # അഡ്മിന് ലോഗ് ഫയൽ അയച്ചു കൊടുക്കുന്നു
+    await bot.send_document(
+        chat_id=message.chat.id,
+        document=file_buffer,
+        caption=f"<b>📊 <u>Missing Movies Report</u>\n\nTotal unique requests: <code>{len(missing_movies)}</code>\n\n(സിനിമകളുടെ പേരും അവ എത്ര തവണ തിരഞ്ഞു എന്ന വിവരവും ഫയലിൽ ലഭ്യമാണ്)</b>",
+        parse_mode=enums.ParseMode.HTML
+    )
