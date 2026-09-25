@@ -247,8 +247,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=50)
-    files_mediaa = await cursor_mediaa.to_list(length=50)
+    files_media = await cursor_media.to_list(length=70)
+    files_mediaa = await cursor_mediaa.to_list(length=70)
 
     interleaved_files = []
     index_media1 = index_media2 = 0
