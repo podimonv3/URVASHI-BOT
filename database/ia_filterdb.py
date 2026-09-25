@@ -240,8 +240,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=60)
-    files_mediaa = await cursor_mediaa.to_list(length=60)
+    files_media = await cursor_media.to_list(length=100)
+    files_mediaa = await cursor_mediaa.to_list(length=100)
 
     # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
     interleaved_files = []
@@ -254,7 +254,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # --- നിങ്ങളുടെ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു ---
+    # --- പുതുക്കിയ സോർട്ടിങ് ലോജിക് ---
     if interleaved_files:
         query_lower = query.lower().strip()
         
@@ -268,42 +268,28 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
             num_key = tuple(numbers)
             
-            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ്/വർഷം (Highest Priority)
-            match_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+|\d{4})'
-            if re.search(match_pattern, file_name_lower):
+            # കണ്ടീഷൻ 1: ക്വറിയിൽ തുടങ്ങി തൊട്ടടുത്ത് വർഷം (4 അക്ക സംഖ്യ) വരുന്നത് (Highest Priority)
+            # ഉദാഹരണത്തിന്: "Drishyam 2013", "Lucifer (2019)"
+            match_year_pattern = r'^' + re.escape(query_lower) + r'\b.*?(\d{4})'
+            if re.search(match_year_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 2: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
-            if file_name_lower.startswith(query_lower):
+            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (Second Priority)
+            # ഉദാഹരണത്തിന്: "Breaking Bad S01", "Money Heist E05"
+            match_season_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+)'
+            if re.search(match_season_pattern, file_name_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
-            return (2, num_key, file_name_lower)
+            # കണ്ടീഷൻ 3: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
+            if file_name_lower.startswith(query_lower):
+                return (2, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 4: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
+            return (3, num_key, file_name_lower)
 
-        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
+        # ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
         interleaved_files.sort(key=sort_by_exact_match)
 
-    # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
-    seen_ids = set()
-    final_sorted_files = []
-    for file in interleaved_files:
-        if file.file_id not in seen_ids:
-            final_sorted_files.append(file)
-            seen_ids.add(file.file_id)
-
-    total_results = len(final_sorted_files)
-
-    # ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്യുന്നു
-    if offset < 0:
-        offset = 0
-
-    files = final_sorted_files[offset:offset + max_results]
-    next_offset = offset + len(files)
-
-    if next_offset < total_results:
-        return files, next_offset, total_results
-    else:
-        return files, '', total_results
 
 
 
