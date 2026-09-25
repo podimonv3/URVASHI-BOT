@@ -207,9 +207,9 @@ async def get_bad_files(query, file_type=None, filter=False):
     return files_media1, files_media2, total_results
         
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Smart Exact Match & Natural Sorting (User Code Optimized)"""
+    """Smart Strict Match - Year First, Season Second (Final Code)"""
 
-    # 1. സെർച്ച് ക്വറി ഡാറ്റാബേസ് ഫോർമാറ്റിലേക്ക് ക്ലീൻ ചെയ്യുന്നു
+    # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
     cleaned_query_chars = re.sub(r'[^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039]', ' ', query_no_apostrophe)
     query = re.sub(r'\s+', ' ', cleaned_query_chars).strip()
@@ -217,11 +217,12 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if not query:
         return [], '', 0
 
-    # റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
-    if ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+    # 2. ലാഗ് ഒഴിവാക്കാൻ ഓരോ വാക്കുകളും വേർതിരിച്ച് റീജക്സ് ഉണ്ടാക്കുന്നു
+    words = query.split()
+    if len(words) == 1:
+        raw_pattern = r'\b' + re.escape(query) + r'\b'
     else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
+        raw_pattern = "".join([f"(?=.*\\b{re.escape(w)}\\b)" for w in words])
 
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
@@ -236,14 +237,14 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if file_type:
         filter_dict['file_type'] = file_type
 
-    # ഡാറ്റാബേസിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
+    # 3. രണ്ട് ഡാറ്റാബേസ് കളക്ഷനിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=200)
-    files_mediaa = await cursor_mediaa.to_list(length=200)
+    files_media = await cursor_media.to_list(length=100)
+    files_mediaa = await cursor_mediaa.to_list(length=100)
 
-    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
+    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിച്ച് ചേർക്കുന്നു (Interleave)
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -254,33 +255,38 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # --- നിങ്ങളുടെ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു ---
+    # 4. വർഷത്തിന് ഒന്നാമതും, സീരീസിന് രണ്ടാമതും മുൻഗണന നൽകുന്ന ലോജിക്
     if interleaved_files:
         query_lower = query.lower().strip()
         
         def sort_by_exact_match(file_obj):
             file_name_lower = file_obj.file_name.lower().strip()
-            # അദൃശ്യ ചിഹ്നങ്ങൾ ഒഴിവാക്കുന്നു
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # നാച്ചുറൽ സോർട്ടിങ്ങിനായി നമ്പറുകൾ വേർതിരിക്കുന്നു
             numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
             num_key = tuple(numbers)
             
-            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ്/വർഷം (Highest Priority)
-            match_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+|\d{4})'
-            if re.search(match_pattern, file_name_lower):
+            # കണ്ടീഷൻ 0: 'love' എന്ന് തുടങ്ങി തൊട്ടടുത്ത് തന്നെ നാലക്ക വർഷം വരുന്നത് (HIGHEST PRIORITY)
+            # ഉദാ: Love 2021, Love 2015
+            year_pattern = r'^' + re.escape(query_lower) + r'\s*\d{4}\b'
+            if re.match(year_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
-                
-            # കണ്ടീഷൻ 2: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
-            if file_name_lower.startswith(query_lower):
+
+            # കണ്ടീഷൻ 1: 'love' എന്ന് തുടങ്ങി തൊട്ടടുത്ത് സീസൺ/എപ്പിസോഡ് വരുന്നത് (SECOND PRIORITY)
+            # Uദാ: Love S01E01, Love E02, Love S02
+            season_pattern = r'^' + re.escape(query_lower) + r'\s*(s\d+|e\d+)\b'
+            if re.match(season_pattern, file_name_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
-            return (2, num_key, file_name_lower)
+            # കണ്ടീഷൻ 2: 'love' എന്ന് വെച്ച് തുടങ്ങുന്ന മറ്റ് സിനിമകൾ (MEDIUM PRIORITY)
+            # ഉദാ: Love Today 2021, Love and Thunder
+            if file_name_lower.startswith(query_lower):
+                return (2, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (LOW PRIORITY)
+            return (3, num_key, file_name_lower)
 
-        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
         interleaved_files.sort(key=sort_by_exact_match)
 
     # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
@@ -293,7 +299,6 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
 
     total_results = len(final_sorted_files)
 
-    # ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്യുന്നു
     if offset < 0:
         offset = 0
 
