@@ -267,31 +267,46 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # സീരീസുകൾക്ക് 1, 2, 3 എന്ന ഓർഡർ കൃത്യമായി കിട്ടാൻ നാച്ചുറൽ സോർട്ടിങ് കീ
-            natural_key = [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', file_name_lower)]
+            # 1. ഒരു സ്പെഷ്യൽ സോർട്ടിങ് കീ നിർമ്മിക്കുന്നു
+            # സിനിമയിലെ വർഷം പുതിയത് ആദ്യം വരാൻ ആ വർഷത്തെ മാത്രം നെഗറ്റീവ് ആക്കുന്നു.
+            # സീരീസുകളിലെ S01, E01 എന്നിവ സാധാരണ പോലെ വരാൻ പോസിറ്റീവ് അക്കങ്ങളാക്കി നിർത്തുന്നു.
+            custom_key = []
+            is_series = bool(re.search(r'\b(s\d+|e\d+)\b', file_name_lower))
             
+            for text in re.split(r'(\d+)', file_name_lower):
+                if text.isdigit():
+                    num = int(text)
+                    # 4 അക്ക സംഖ്യ വരികയും അത് സീരീസ് ഫയൽ അല്ലാതിരിക്കുകയും ചെയ്താൽ നെഗറ്റീവ് ആക്കുന്നു (സിനിമകൾക്ക് വേണ്ടി)
+                    if len(text) == 4 and not is_series:
+                        custom_key.append(-num)  # -2022 ആണ് -2017 നേക്കാൾ ചെറുത്, അതുകൊണ്ട് 2022 ആദ്യം വരും
+                    else:
+                        custom_key.append(num)   # സീരീസ് നമ്പറുകൾ (S01, E01) സാധാരണ പോലെ 1, 2, 3 എന്ന് വരും
+                else:
+                    custom_key.append(text)
+
             # --- കണ്ടീഷൻ 1: ക്വറിയും തൊട്ടടുത്ത് വർഷവും മാത്രം വരുന്നത് (Highest Priority) ---
-            # യൂസർ "alpha" എന്ന് അടിച്ചാൽ "alpha 2026" ഇതിൽ വരും, "alpha dog 2006" വരില്ല.
+            # ഉദാഹരണത്തിന്: "beast 2022..."
             exact_year_pattern = r'^' + re.escape(query_lower) + r'\s+(\d{4})\b'
             if re.search(exact_year_pattern, file_name_lower):
-                return (0, natural_key)
+                return (0, custom_key)
 
-            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി എവിടെയെങ്കിലും വർഷം വരുന്നത് (ഉദാ: alpha dog 2006)
+            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി എവിടെയെങ്കിലും വർഷം വരുന്നത് (ഉദാ: beast race 2026)
             match_year_pattern = r'^' + re.escape(query_lower) + r'\b.*?(\d{4})'
             if re.search(match_year_pattern, file_name_lower):
-                return (1, natural_key)
+                return (1, custom_key)
                 
-            # കണ്ടീഷൻ 3: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (ഉദാ: breaking bad s01)
+            # കണ്ടീഷൻ 3: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (ഉദാ: beast s01)
             match_season_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+)'
             if re.search(match_season_pattern, file_name_lower):
-                return (2, natural_key)
+                return (2, custom_key)
                 
-            # കണ്ടീഷൻ 4: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (ഉദാ: alphabet)
+            # കണ്ടീഷൻ 4: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ 
             if file_name_lower.startswith(query_lower):
-                return (3, natural_key)
+                return (3, custom_key)
                 
             # കണ്ടീഷൻ 5: ബാക്കിയുള്ളവ
-            return (4, natural_key)
+            return (4, custom_key)
+
 
 
         # ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
