@@ -240,8 +240,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=60)
-    files_mediaa = await cursor_mediaa.to_list(length=60)
+    files_media = await cursor_media.to_list(length=200)
+    files_mediaa = await cursor_mediaa.to_list(length=200)
 
     # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
     interleaved_files = []
