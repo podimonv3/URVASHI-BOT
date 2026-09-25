@@ -205,9 +205,12 @@ async def get_bad_files(query, file_type=None, filter=False):
     files_media2 = await cursor_media2.to_list(length=total_results_media2)
 
     return files_media1, files_media2, total_results
-        
+
+
+
+
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """100% Fixed Strict Match & Auto-Year Detection for Short Queries"""
+    """Smart Strict Match - Latest Years First (100% Group Retention)"""
 
     # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
@@ -219,11 +222,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
 
     words = query.split()
     
-    # 2. സ്മാർട്ട് ക്വറി ഫിൽറ്റർ (ഡാറ്റാബേസ് ലെവലിൽ തന്നെ തടയുന്നു)
-    # യൂസർ വെറും 2 അല്ലെങ്കിൽ 3 അക്ഷരമുള്ള ചെറിയ വാക്കാണ് തിരയുന്നതെങ്കിൽ (ഉദാ: dc, don)
+    # 2. സ്മാർട്ട് ക്വറി ഫിൽറ്റർ (ചെറിയ വാക്കുകൾക്ക് വർഷം/സീസൺ നിർബന്ധമാക്കുന്നു)
     if len(words) == 1 and len(query) <= 3:
-        # ആ വാക്ക് കഴിഞ്ഞ് തൊട്ടടുത്ത് വർഷമോ (2026) സീസണോ (S01) ഉള്ള ഫയലുകൾ മാത്രം ഡാറ്റാബേസിൽ നിന്ന് എടുക്കുക
-        # ഇത് 'DC We Bare Bears' പോലുള്ള അനാവശ്യ ഫയലുകൾ ഡാറ്റാബേസിൽ നിന്ന് വരുന്നത് പൂർണ്ണമായി തടയും
         raw_pattern = r'^' + re.escape(query) + r'\b\s*(\d{4}|s\d+|e\d+)'
     elif len(words) == 1:
         raw_pattern = r'\b' + re.escape(query) + r'\b'
@@ -247,8 +247,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=70)
-    files_mediaa = await cursor_mediaa.to_list(length=70)
+    files_media = await cursor_media.to_list(length=60)
+    files_mediaa = await cursor_mediaa.to_list(length=60)
 
     interleaved_files = []
     index_media1 = index_media2 = 0
@@ -260,7 +260,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # 4. സോർട്ടിങ് ലോജിക് (വർഷത്തിന് ഒന്നാം സ്ഥാനം)
+    # 4. സോർട്ടിങ് ലോജിക് (ലേറ്റസ്റ്റ് വർഷങ്ങൾക്ക് ഏറ്റവും ഉയർന്ന മുൻഗണന)
     if interleaved_files:
         query_lower = query.lower().strip()
         
@@ -269,20 +269,23 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
+            # --- പ്രധാന മാറ്റം ഇവിടെയാണ് ---
+            # വർഷങ്ങളും നമ്പറുകളും നെഗറ്റീവ് ആക്കുന്നു (-2026, -2018). 
+            # ഇത് കാരണം സോർട്ട് ചെയ്യുമ്പോൾ വലിയ വർഷങ്ങൾ (2026) ഏറ്റവും മുകളിൽ വരും.
             numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
-            num_key = tuple(numbers)
+            num_key = tuple(-x for x in numbers)
             
-            # കണ്ടീഷൻ 0: ക്വറി + വർഷം (ഉദാ: DC 2026) -> HIGHEST PRIORITY
+            # കണ്ടീഷൻ 0: ക്വറി + വർഷം (ഉദാ: Alpha 2026, Alpha 2018) -> HIGHEST PRIORITY
             year_pattern = r'^' + re.escape(query_lower) + r'\s*\d{4}\b'
             if re.match(year_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
 
-            # കണ്ടീഷൻ 1: ക്വറി + സീസൺ/എപ്പിസോഡ് (ഉദാ: DC S01)
+            # കണ്ടീഷൻ 1: ക്വറി + സീസൺ/എപ്പിസോഡ് (ഉദാ: Alpha S01)
             season_pattern = r'^' + re.escape(query_lower) + r'\s*(s\d+|e\d+)\b'
             if re.match(season_pattern, file_name_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 2: വാക്ക് വെച്ച് തുടങ്ങുന്ന മറ്റ് ഫയലുകൾ
+            # കണ്ടീഷൻ 2: വാക്ക് വെച്ച് തുടങ്ങുന്ന മറ്റ് ഫയലുകൾ (ഉദാ: Alpha Dog)
             if file_name_lower.startswith(query_lower):
                 return (2, num_key, file_name_lower)
                 
@@ -310,6 +313,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 
 
