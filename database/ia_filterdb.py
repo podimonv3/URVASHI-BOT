@@ -36,7 +36,10 @@ class Media(Document):
     caption = fields.StrField(allow_none=True)
     
     class Meta:
-        indexes = ('$file_name', )
+        # file_name-ൽ സ്മാർട്ട് സെർച്ച് ചെയ്യാൻ Text Index നൽകുന്നു
+        indexes = [
+            {'fields': ['file_name'], 'type': 'text'}
+        ]
         collection_name = COLLECTION_NAME
 
 @instance2.register
@@ -50,8 +53,12 @@ class Mediaa(Document):
     caption = fields.StrField(allow_none=True)
     
     class Metaa:
-        indexes = ('$file_name', )
+        # file_name-ൽ സ്മാർട്ട് സെർച്ച് ചെയ്യാൻ Text Index നൽകുന്നു
+        indexes = [
+            {'fields': ['file_name'], 'type': 'text'}
+        ]
         collection_name = COLLECTION_NAME
+
 
 async def check_file(media):
     """Check if file is present in the database"""
@@ -210,7 +217,7 @@ async def get_bad_files(query, file_type=None, filter=False):
 
 
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Smart Exact Match & Natural Sorting (User Code Optimized)"""
+    """Text Search Index & Relevancy Score Optimized Function"""
 
     # 1. സെർച്ച് ക്വറി ഡാറ്റാബേസ് ഫോർമാറ്റിലേക്ക് ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
@@ -220,33 +227,29 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if not query:
         return [], '', 0
 
-    # റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
-    if ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
-    else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
-
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
-        return [], '', 0
-
-    if USE_CAPTION_FILTER:
-        filter_dict = {'$or': [{'file_name': regex}, {'caption': regex}]}
-    else:
-        filter_dict = {'file_name': regex}
+    # 2. Text Search ഫിൽട്ടർ നിർമ്മിക്കുന്നു
+    score_filter = {
+        "$text": {"$search": query}
+    }
 
     if file_type:
-        filter_dict['file_type'] = file_type
+        score_filter['file_type'] = file_type
 
-    # ഡാറ്റാബേസിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
-    cursor_media = Media.find(filter_dict)
-    cursor_mediaa = Mediaa.find(filter_dict)
+    # 3. ഡാറ്റാബേസിൽ നിന്ന് ഏറ്റവും അനുയോജ്യമായവ (Best Match) സ്കോർ നോക്കി സോർട്ട് ചെയ്ത് എടുക്കുന്നു
+    projection = {"score": {"$meta": "textScore"}}
+    
+    try:
+        cursor_media = Media.find(score_filter, projection).sort([("score", {"$meta": "textScore"})])
+        cursor_mediaa = Mediaa.find(score_filter, projection).sort([("score", {"$meta": "textScore"})])
 
-    files_media = await cursor_media.to_list(length=200)
-    files_mediaa = await cursor_mediaa.to_list(length=200)
+        # ആദ്യത്തെ 200 എണ്ണം എടുത്താലും അത് ഡാറ്റാബേസിലെ ഏറ്റവും കൃത്യമായ 200 മാച്ചുകൾ ആയിരിക്കും!
+        files_media = await cursor_media.to_list(length=100)
+        files_mediaa = await cursor_mediaa.to_list(length=100)
+    except Exception as e:
+        logger.error(f"Database search error: {e}")
+        return [], '', 0
 
-    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
+    # 4. രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു (Interleaving)
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -257,7 +260,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # --- നിങ്ങളുടെ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു ---
+    # 5. നിങ്ങളുടെ നാച്ചുറൽ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു
     if interleaved_files:
         query_lower = query.lower().strip()
         
@@ -283,10 +286,10 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
             return (2, num_key, file_name_lower)
 
-        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
+        # പൈത്തൺ സോർട്ടിങ് വഴി ഫയലുകൾ ഒന്നുകൂടി കൃത്യമാക്കുന്നു
         interleaved_files.sort(key=sort_by_exact_match)
 
-    # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
+    # 6. ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
     seen_ids = set()
     final_sorted_files = []
     for file in interleaved_files:
@@ -296,7 +299,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
 
     total_results = len(final_sorted_files)
 
-    # ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്യുന്നു
+    # 7. ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്ത് റിസൾട്ട് നൽകുന്നു (Pagination)
     if offset < 0:
         offset = 0
 
