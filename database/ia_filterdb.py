@@ -207,7 +207,7 @@ async def get_bad_files(query, file_type=None, filter=False):
     return files_media1, files_media2, total_results
         
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Smart Strict Match - Year First, Season Second (Final Code)"""
+    """100% Fixed Strict Match & Auto-Year Detection for Short Queries"""
 
     # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
@@ -217,9 +217,15 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if not query:
         return [], '', 0
 
-    # 2. ലാഗ് ഒഴിവാക്കാൻ ഓരോ വാക്കുകളും വേർതിരിച്ച് റീജക്സ് ഉണ്ടാക്കുന്നു
     words = query.split()
-    if len(words) == 1:
+    
+    # 2. സ്മാർട്ട് ക്വറി ഫിൽറ്റർ (ഡാറ്റാബേസ് ലെവലിൽ തന്നെ തടയുന്നു)
+    # യൂസർ വെറും 2 അല്ലെങ്കിൽ 3 അക്ഷരമുള്ള ചെറിയ വാക്കാണ് തിരയുന്നതെങ്കിൽ (ഉദാ: dc, don)
+    if len(words) == 1 and len(query) <= 3:
+        # ആ വാക്ക് കഴിഞ്ഞ് തൊട്ടടുത്ത് വർഷമോ (2026) സീസണോ (S01) ഉള്ള ഫയലുകൾ മാത്രം ഡാറ്റാബേസിൽ നിന്ന് എടുക്കുക
+        # ഇത് 'DC We Bare Bears' പോലുള്ള അനാവശ്യ ഫയലുകൾ ഡാറ്റാബേസിൽ നിന്ന് വരുന്നത് പൂർണ്ണമായി തടയും
+        raw_pattern = r'^' + re.escape(query) + r'\b\s*(\d{4}|s\d+|e\d+)'
+    elif len(words) == 1:
         raw_pattern = r'\b' + re.escape(query) + r'\b'
     else:
         raw_pattern = "".join([f"(?=.*\\b{re.escape(w)}\\b)" for w in words])
@@ -237,14 +243,13 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if file_type:
         filter_dict['file_type'] = file_type
 
-    # 3. രണ്ട് ഡാറ്റാബേസ് കളക്ഷനിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
+    # 3. ഡാറ്റാബേസ് ക്വറി (പരമാവധി 200 എണ്ണം)
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
     files_media = await cursor_media.to_list(length=50)
     files_mediaa = await cursor_mediaa.to_list(length=50)
 
-    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിച്ച് ചേർക്കുന്നു (Interleave)
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -255,7 +260,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # 4. വർഷത്തിന് ഒന്നാമതും, സീരീസിന് രണ്ടാമതും മുൻഗണന നൽകുന്ന ലോജിക്
+    # 4. സോർട്ടിങ് ലോജിക് (വർഷത്തിന് ഒന്നാം സ്ഥാനം)
     if interleaved_files:
         query_lower = query.lower().strip()
         
@@ -267,29 +272,25 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
             num_key = tuple(numbers)
             
-            # കണ്ടീഷൻ 0: 'love' എന്ന് തുടങ്ങി തൊട്ടടുത്ത് തന്നെ നാലക്ക വർഷം വരുന്നത് (HIGHEST PRIORITY)
-            # ഉദാ: Love 2021, Love 2015
+            # കണ്ടീഷൻ 0: ക്വറി + വർഷം (ഉദാ: DC 2026) -> HIGHEST PRIORITY
             year_pattern = r'^' + re.escape(query_lower) + r'\s*\d{4}\b'
             if re.match(year_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
 
-            # കണ്ടീഷൻ 1: 'love' എന്ന് തുടങ്ങി തൊട്ടടുത്ത് സീസൺ/എപ്പിസോഡ് വരുന്നത് (SECOND PRIORITY)
-            # Uദാ: Love S01E01, Love E02, Love S02
+            # കണ്ടീഷൻ 1: ക്വറി + സീസൺ/എപ്പിസോഡ് (ഉദാ: DC S01)
             season_pattern = r'^' + re.escape(query_lower) + r'\s*(s\d+|e\d+)\b'
             if re.match(season_pattern, file_name_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 2: 'love' എന്ന് വെച്ച് തുടങ്ങുന്ന മറ്റ് സിനിമകൾ (MEDIUM PRIORITY)
-            # ഉദാ: Love Today 2021, Love and Thunder
+            # കണ്ടീഷൻ 2: വാക്ക് വെച്ച് തുടങ്ങുന്ന മറ്റ് ഫയലുകൾ
             if file_name_lower.startswith(query_lower):
                 return (2, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (LOW PRIORITY)
             return (3, num_key, file_name_lower)
 
         interleaved_files.sort(key=sort_by_exact_match)
 
-    # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
+    # ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
     seen_ids = set()
     final_sorted_files = []
     for file in interleaved_files:
@@ -309,6 +310,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 
 
