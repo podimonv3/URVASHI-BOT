@@ -210,9 +210,9 @@ async def get_bad_files(query, file_type=None, filter=False):
 
 
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Ultimate Speed & Position-Independent Search - 100% Result Fixed"""
+    """Smart Exact Match & Natural Sorting (User Code Optimized)"""
 
-    # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
+    # 1. സെർച്ച് ക്വറി ഡാറ്റാബേസ് ഫോർമാറ്റിലേക്ക് ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
     cleaned_query_chars = re.sub(r'[^\u0D00-\u0D7F\u0041-\u005A\u0061-\u007A\u0030-\u0039]', ' ', query_no_apostrophe)
     query = re.sub(r'\s+', ' ', cleaned_query_chars).strip()
@@ -220,15 +220,11 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if not query:
         return [], '', 0
 
-    words = query.split()
-    first_word = words[0] # ആദ്യത്തെ വാക്ക് കൃത്യമായി നിർവചിക്കുന്നു
-    
-    # 2. ആദ്യത്തെ വാക്ക് ഫയലിന്റെ എവിടെയുണ്ടെങ്കിലും അതിവേഗം കണ്ടെത്താനുള്ള ഒപ്റ്റിമൈസ് ചെയ്ത പാറ്റേൺ
-    # ഇത് 'HDTCPREDVDFILES - The Paradise' പോലുള്ള ഫയലുകളും കൃത്യമായി കണ്ടുപിടിക്കും
-    if len(words) == 1 and len(first_word) <= 3:
-        raw_pattern = r'\b' + re.escape(first_word) + r'\b\s*(\d{4}|s\d+|e\d+)'
+    # റീജക്സ് പാറ്റേൺ നിർമ്മിക്കുന്നു
+    if ' ' not in query:
+        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
     else:
-        raw_pattern = r'\b' + re.escape(first_word) + r'\b'
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_()]')
 
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
@@ -243,13 +239,14 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if file_type:
         filter_dict['file_type'] = file_type
 
-    # 3. ഡാറ്റാബേസ് ക്വറി (പരമാവധി 300 എണ്ണം)
+    # ഡാറ്റാബേസിൽ നിന്നും ഫയലുകൾ എടുക്കുന്നു
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=300)
-    files_mediaa = await cursor_mediaa.to_list(length=300)
+    files_media = await cursor_media.to_list(length=200)
+    files_mediaa = await cursor_mediaa.to_list(length=200)
 
+    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിപ്പിക്കുന്നു
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -260,57 +257,46 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # 4. ഇൻ-മെമ്മറി ഫിൽട്ടറിംഗും സ്മാർട്ട് സോർട്ടിംഗും
-    query_words_set = set(w.lower() for w in words)
-    filtered_and_sorted_files = []
-    
+    # --- നിങ്ങളുടെ സോർട്ടിങ് ലോജിക് ഇവിടെ പ്രവർത്തിക്കുന്നു ---
     if interleaved_files:
-        valid_files = []
-        for file_obj in interleaved_files:
-            file_name_lower = file_obj.file_name.lower()
-            file_name_clean = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
-            file_name_clean = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_clean)
+        query_lower = query.lower().strip()
+        
+        def sort_by_exact_match(file_obj):
+            file_name_lower = file_obj.file_name.lower().strip()
+            # അദൃശ്യ ചിഹ്നങ്ങൾ ഒഴിവാക്കുന്നു
+            file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
+            file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # യൂസർ അടിച്ച എല്ലാ വാക്കുകളും ഫയൽ നെയിമിൽ ഉണ്ടെന്ന് ഉറപ്പുവരുത്തുന്നു
-            if all(w in file_name_clean for w in query_words_set):
-                valid_files.append((file_obj, file_name_clean))
-
-        # സിനിമകൾക്ക് ലേറ്റസ്റ്റ് വർഷം ആദ്യം, സീരീസുകൾക്ക് എപ്പിസോഡ് ഓർഡർ
-        def sort_by_exact_match(item):
-            file_obj, file_name_clean = item
+            # നാച്ചുറൽ സോർട്ടിങ്ങിനായി നമ്പറുകൾ വേർതിരിക്കുന്നു
+            numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
+            num_key = tuple(numbers)
             
-            is_series = bool(re.search(r'\b(s\d+|e\d+)\b', file_name_clean))
-            
-            if is_series:
-                clean_series_name = re.sub(r'\b\d{4}\b', '', file_name_clean)
-                numbers = [int(s) for s in re.findall(r'\d+', clean_series_name)]
-                num_key = tuple(numbers)
-            else:
-                numbers = [int(s) for s in re.findall(r'\d+', file_name_clean)]
-                num_key = tuple(-x for x in numbers)
-            
-            # ഫയൽ നെയിമിൽ ക്വറി കഴിഞ്ഞ് തൊട്ടടുത്ത് തന്നെ വർഷമോ സീസണോ വരുന്നവയ്ക്ക് ഒന്നാം മുൻഗണന
-            strict_pattern = r'\b' + re.escape(first_word.lower()) + r'\s*(\d{4}|s\d+|e\d+)\b'
-            if re.search(strict_pattern, file_name_clean):
-                # ഫയലിന്റെ തുടക്കത്തിൽ തന്നെ വാക്ക് വന്നാൽ കൂടുതൽ മുൻഗണന (ഉദാ: Paradise vs The Paradise)
-                start_bonus = 0 if file_name_clean.startswith(first_word.lower()) else 1
-                return (0, start_bonus, num_key, file_name_clean)
+            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ്/വർഷം (Highest Priority)
+            match_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+|\d{4})'
+            if re.search(match_pattern, file_name_lower):
+                return (0, num_key, file_name_lower)
                 
-            return (1, 0, num_key, file_name_clean)
+            # കണ്ടീഷൻ 2: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
+            if file_name_lower.startswith(query_lower):
+                return (1, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
+            return (2, num_key, file_name_lower)
 
-        valid_files.sort(key=sort_by_exact_match)
-        filtered_and_sorted_files = [item[0] for item in valid_files]
+        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
+        interleaved_files.sort(key=sort_by_exact_match)
 
-    # ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
+    # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
     seen_ids = set()
     final_sorted_files = []
-    for file in filtered_and_sorted_files:
+    for file in interleaved_files:
         if file.file_id not in seen_ids:
             final_sorted_files.append(file)
             seen_ids.add(file.file_id)
 
     total_results = len(final_sorted_files)
 
+    # ഓഫ്‌സെറ്റ് സെറ്റ് ചെയ്യുന്നു
     if offset < 0:
         offset = 0
 
@@ -321,6 +307,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 
 
