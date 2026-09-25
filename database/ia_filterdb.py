@@ -263,32 +263,36 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         
         def sort_by_exact_match(file_obj):
             file_name_lower = file_obj.file_name.lower().strip()
-            # അദൃശ്യ ചിഹ്നങ്ങൾ ഒഴിവാക്കുന്നു
+            # അദൃശ്യ ചിഹ്നങ്ങളും അധിക സ്പേസുകളും ഒഴിവാക്കുന്നു
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # നാച്ചുറൽ സോർട്ടിങ്ങിനായി നമ്പറുകൾ വേർതിരിക്കുന്നു
-            numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
-            num_key = tuple(numbers)
+            # സീരീസുകൾക്ക് 1, 2, 3 എന്ന ഓർഡർ കൃത്യമായി കിട്ടാൻ നാച്ചുറൽ സോർട്ടിങ് കീ
+            natural_key = [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', file_name_lower)]
             
-            # കണ്ടീഷൻ 1: ക്വറിയിൽ തുടങ്ങി തൊട്ടടുത്ത് വർഷം (4 അക്ക സംഖ്യ) വരുന്നത് (Highest Priority)
-            # ഉദാഹരണത്തിന്: "Drishyam 2013", "Lucifer (2019)"
+            # --- കണ്ടീഷൻ 1: ക്വറിയും തൊട്ടടുത്ത് വർഷവും മാത്രം വരുന്നത് (Highest Priority) ---
+            # യൂസർ "alpha" എന്ന് അടിച്ചാൽ "alpha 2026" ഇതിൽ വരും, "alpha dog 2006" വരില്ല.
+            exact_year_pattern = r'^' + re.escape(query_lower) + r'\s+(\d{4})\b'
+            if re.search(exact_year_pattern, file_name_lower):
+                return (0, natural_key)
+
+            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി എവിടെയെങ്കിലും വർഷം വരുന്നത് (ഉദാ: alpha dog 2006)
             match_year_pattern = r'^' + re.escape(query_lower) + r'\b.*?(\d{4})'
             if re.search(match_year_pattern, file_name_lower):
-                return (0, num_key, file_name_lower)
+                return (1, natural_key)
                 
-            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (Second Priority)
-            # ഉദാഹരണത്തിന്: "Breaking Bad S01", "Money Heist E05"
+            # കണ്ടീഷൻ 3: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (ഉദാ: breaking bad s01)
             match_season_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+)'
             if re.search(match_season_pattern, file_name_lower):
-                return (1, num_key, file_name_lower)
+                return (2, natural_key)
                 
-            # കണ്ടീഷൻ 3: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
+            # കണ്ടീഷൻ 4: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (ഉദാ: alphabet)
             if file_name_lower.startswith(query_lower):
-                return (2, num_key, file_name_lower)
+                return (3, natural_key)
                 
-            # കണ്ടീഷൻ 4: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
-            return (3, num_key, file_name_lower)
+            # കണ്ടീഷൻ 5: ബാക്കിയുള്ളവ
+            return (4, natural_key)
+
 
         # ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
         interleaved_files.sort(key=sort_by_exact_match)
