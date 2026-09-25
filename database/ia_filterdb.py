@@ -271,19 +271,24 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
             num_key = tuple(numbers)
             
-            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ്/വർഷം (Highest Priority)
-            match_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+|\d{4})'
-            if re.search(match_pattern, file_name_lower):
+            # കണ്ടീഷൻ 1: എക്സാക്റ്റ് മാച്ച് + വർഷം (\d{4}) -> Highest Priority (0)
+            year_pattern = r'^' + re.escape(query_lower) + r'\b.*?\d{4}'
+            if re.search(year_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 2: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ (Medium Priority)
-            if file_name_lower.startswith(query_lower):
+            # കണ്ടീഷൻ 2: എക്സാക്റ്റ് മാച്ച് + സീസൺ/എപ്പിസോഡ് (s\d+|e\d+) -> High Priority (1)
+            season_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+)'
+            if re.search(season_pattern, file_name_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 3: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (Normal Priority)
-            return (2, num_key, file_name_lower)
+            # കണ്ടീഷൻ 3: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ -> Medium Priority (2)
+            if file_name_lower.startswith(query_lower):
+                return (2, num_key, file_name_lower)
+                
+            # കണ്ടീഷൻ 4: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ -> Normal Priority (3)
+            return (3, num_key, file_name_lower)
 
-        # നിങ്ങളുടെ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
+        # പുതിയ ലോജിക് പ്രകാരം ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
         interleaved_files.sort(key=sort_by_exact_match)
 
     # ഒരേ ഫയലുകൾ വീണ്ടും വരാതിരിക്കാൻ ഡ്യൂപ്ലിക്കേഷൻ ഒഴിവാക്കുന്നു
@@ -307,10 +312,6 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return files, next_offset, total_results
     else:
         return files, '', total_results
-
-
-
-
 
 
 
