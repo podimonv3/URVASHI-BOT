@@ -210,7 +210,7 @@ async def get_bad_files(query, file_type=None, filter=False):
 
 
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Ultimate Infinite-Word Speed Optimization - Always Superfast"""
+    """Ultimate Speed & Position-Independent Search - 100% Result Fixed"""
 
     # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
@@ -221,12 +221,12 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return [], '', 0
 
     words = query.split()
+    first_word = words[0] # ആദ്യത്തെ വാക്ക് കൃത്യമായി നിർവചിക്കുന്നു
     
-    # 2. ആദ്യത്തെ വാക്ക് മാത്രം ഉപയോഗിച്ച് അതിവേഗ ഡാറ്റാബേസ് പാറ്റേൺ നിർമ്മിക്കുന്നു
-    # ഇത് ലക്ഷക്കണക്കിന് ഫയലുകൾ പരതുന്നത് ഒഴിവാക്കി മില്ലിസെക്കന്റുകൾക്കുള്ളിൽ ക്വറി പൂർത്തിയാക്കും
-    first_word = words[0]
+    # 2. ആദ്യത്തെ വാക്ക് ഫയലിന്റെ എവിടെയുണ്ടെങ്കിലും അതിവേഗം കണ്ടെത്താനുള്ള ഒപ്റ്റിമൈസ് ചെയ്ത പാറ്റേൺ
+    # ഇത് 'HDTCPREDVDFILES - The Paradise' പോലുള്ള ഫയലുകളും കൃത്യമായി കണ്ടുപിടിക്കും
     if len(words) == 1 and len(first_word) <= 3:
-        raw_pattern = r'^' + re.escape(first_word) + r'\b\s*(\d{4}|s\d+|e\d+)'
+        raw_pattern = r'\b' + re.escape(first_word) + r'\b\s*(\d{4}|s\d+|e\d+)'
     else:
         raw_pattern = r'\b' + re.escape(first_word) + r'\b'
 
@@ -243,14 +243,13 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     if file_type:
         filter_dict['file_type'] = file_type
 
-    # 3. ഡാറ്റാബേസ് ക്വറി (ആദ്യത്തെ വാക്ക് വെച്ച് മാത്രം വളരെ വേഗത്തിൽ എടുക്കുന്നു)
+    # 3. ഡാറ്റാബേസ് ക്വറി (പരമാവധി 300 എണ്ണം)
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=60)
-    files_mediaa = await cursor_mediaa.to_list(length=60)
+    files_media = await cursor_media.to_list(length=300)
+    files_mediaa = await cursor_mediaa.to_list(length=300)
 
-    # രണ്ട് കളക്ഷനിലെയും ഫയലുകൾ ഒന്നിച്ച് ചേർക്കുന്നു
     interleaved_files = []
     index_media1 = index_media2 = 0
     while index_media1 < len(files_media) or index_media2 < len(files_mediaa):
@@ -261,52 +260,43 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # 4. ഇൻ-മെമ്മറി ഫിൽട്ടറിംഗും സോർട്ടിംഗും (പൈത്തൺ മെമ്മറിയിൽ വെച്ച് അതിവേഗം ചെയ്യുന്നു)
-    query_lower = query.lower().strip()
+    # 4. ഇൻ-മെമ്മറി ഫിൽട്ടറിംഗും സ്മാർട്ട് സോർട്ടിംഗും
     query_words_set = set(w.lower() for w in words)
-    
     filtered_and_sorted_files = []
     
     if interleaved_files:
-        # യൂസർ ഒന്നിൽ കൂടുതൽ വാക്കുകൾ അടിച്ചാൽ, ആ വാക്കുകളെല്ലാം ഫയൽ നെയിമിൽ ഉണ്ടോ എന്ന് പൈത്തൺ പരിശോധിക്കുന്നു
         valid_files = []
         for file_obj in interleaved_files:
             file_name_lower = file_obj.file_name.lower()
             file_name_clean = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_clean = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_clean)
             
-            # ഡാറ്റാബേസിലെ ഫയൽ നാമത്തിൽ നിന്നും ചിഹ്നങ്ങൾ മാറ്റിയതുപോലെ വാക്കുകൾ വേർതിരിക്കുന്നു
-            file_words = set(re.findall(r'\b\w+\b', file_name_clean))
-            
-            # യൂസർ തിരഞ്ഞ എല്ലാ വാക്കുകളും ഫയൽ നെയിമിൽ ഉണ്ടെങ്കിൽ മാത്രം സെലക്ട് ചെയ്യുന്നു
-            if query_words_set.issubset(file_words) or all(w in file_name_clean for w in query_words_set):
+            # യൂസർ അടിച്ച എല്ലാ വാക്കുകളും ഫയൽ നെയിമിൽ ഉണ്ടെന്ന് ഉറപ്പുവരുത്തുന്നു
+            if all(w in file_name_clean for w in query_words_set):
                 valid_files.append((file_obj, file_name_clean))
 
-        # താങ്കൾ ആവശ്യപ്പെട്ട സ്മാർട്ട് സോർട്ടിങ് ലോജിക് പ്രവർത്തിക്കുന്നു
+        # സിനിമകൾക്ക് ലേറ്റസ്റ്റ് വർഷം ആദ്യം, സീരീസുകൾക്ക് എപ്പിസോഡ് ഓർഡർ
         def sort_by_exact_match(item):
             file_obj, file_name_clean = item
             
             is_series = bool(re.search(r'\b(s\d+|e\d+)\b', file_name_clean))
             
             if is_series:
-                # സീരീസ് എപ്പിസോഡ് ഓർഡർ നിലനിർത്താൻ വർഷം ഒഴിവാക്കുന്നു
                 clean_series_name = re.sub(r'\b\d{4}\b', '', file_name_clean)
                 numbers = [int(s) for s in re.findall(r'\d+', clean_series_name)]
                 num_key = tuple(numbers)
             else:
-                # ലേറ്റസ്റ്റ് സിനിമകൾ ആദ്യം വരാൻ വർഷം നെഗറ്റീവ് ആക്കുന്നു
                 numbers = [int(s) for s in re.findall(r'\d+', file_name_clean)]
                 num_key = tuple(-x for x in numbers)
             
-            # കണ്ടീഷൻ 0: ആദ്യത്തെ വാക്ക് കഴിഞ്ഞ് തൊട്ടടുത്ത് വർഷമോ സീസണോ ഉള്ളവയ്ക്ക് ഫസ്റ്റ് പ്രിഫറൻസ്
-            strict_pattern = r'^' + re.escape(first_word.lower()) + r'\s*(\d{4}|s\d+|e\d+)\b'
-            if re.match(strict_pattern, file_name_clean):
-                return (0, num_key, file_name_clean)
+            # ഫയൽ നെയിമിൽ ക്വറി കഴിഞ്ഞ് തൊട്ടടുത്ത് തന്നെ വർഷമോ സീസണോ വരുന്നവയ്ക്ക് ഒന്നാം മുൻഗണന
+            strict_pattern = r'\b' + re.escape(first_word.lower()) + r'\s*(\d{4}|s\d+|e\d+)\b'
+            if re.search(strict_pattern, file_name_clean):
+                # ഫയലിന്റെ തുടക്കത്തിൽ തന്നെ വാക്ക് വന്നാൽ കൂടുതൽ മുൻഗണന (ഉദാ: Paradise vs The Paradise)
+                start_bonus = 0 if file_name_clean.startswith(first_word.lower()) else 1
+                return (0, start_bonus, num_key, file_name_clean)
                 
-            if file_name_clean.startswith(first_word.lower()):
-                return (1, num_key, file_name_clean)
-                
-            return (2, num_key, file_name_clean)
+            return (1, 0, num_key, file_name_clean)
 
         valid_files.sort(key=sort_by_exact_match)
         filtered_and_sorted_files = [item[0] for item in valid_files]
