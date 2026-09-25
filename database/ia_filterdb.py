@@ -263,50 +263,46 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         
         def sort_by_exact_match(file_obj):
             file_name_lower = file_obj.file_name.lower().strip()
-            # അദൃശ്യ ചിഹ്നങ്ങളും അധിക സ്പേസുകളും ഒഴിവാക്കുന്നു
+            # അദൃശ്യ ചിഹ്നങ്ങളും അധിക സ്പേസുകളും പൂർണ്ണമായി ഒഴിവാക്കുന്നു
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # 1. ഒരു സ്പെഷ്യൽ സോർട്ടിങ് കീ നിർമ്മിക്കുന്നു
-            # സിനിമയിലെ വർഷം പുതിയത് ആദ്യം വരാൻ ആ വർഷത്തെ മാത്രം നെഗറ്റീവ് ആക്കുന്നു.
-            # സീരീസുകളിലെ S01, E01 എന്നിവ സാധാരണ പോലെ വരാൻ പോസിറ്റീവ് അക്കങ്ങളാക്കി നിർത്തുന്നു.
+            # കസ്റ്റം സോർട്ടിങ് കീ നിർമ്മാണം
             custom_key = []
             is_series = bool(re.search(r'\b(s\d+|e\d+)\b', file_name_lower))
             
             for text in re.split(r'(\d+)', file_name_lower):
                 if text.isdigit():
                     num = int(text)
-                    # 4 അക്ക സംഖ്യ വരികയും അത് സീരീസ് ഫയൽ അല്ലാതിരിക്കുകയും ചെയ്താൽ നെഗറ്റീവ് ആക്കുന്നു (സിനിമകൾക്ക് വേണ്ടി)
                     if len(text) == 4 and not is_series:
-                        custom_key.append(-num)  # -2022 ആണ് -2017 നേക്കാൾ ചെറുത്, അതുകൊണ്ട് 2022 ആദ്യം വരും
+                        custom_key.append(-num)  # സിനിമകളുടെ വർഷം Descending ഓർഡറിൽ വരാൻ നെഗറ്റീവ് ആക്കുന്നു
                     else:
-                        custom_key.append(num)   # സീരീസ് നമ്പറുകൾ (S01, E01) സാധാരണ പോലെ 1, 2, 3 എന്ന് വരും
+                        custom_key.append(num)
                 else:
                     custom_key.append(text)
 
-            # --- കണ്ടീഷൻ 1: ക്വറിയും തൊട്ടടുത്ത് വർഷവും മാത്രം വരുന്നത് (Highest Priority) ---
-            # ഉദാഹരണത്തിന്: "beast 2022..."
-            exact_year_pattern = r'^' + re.escape(query_lower) + r'\s+(\d{4})\b'
+            # --- കണ്ടീഷൻ 1: ക്വറിയും തൊട്ടടുത്ത് വർഷവും വരുന്നത് (സ്പേസ് ഉണ്ടെങ്കിലും ഇല്ലെങ്കിലും) ---
+            # ഇവിടെ \s* നൽകിയതിനാൽ "dc 2026", "dc2026", "dc-2026" എന്നിവയെല്ലാം കൃത്യമായി മാച്ച് ആകും.
+            exact_year_pattern = r'^' + re.escape(query_lower) + r'\s*(\d{4})\b'
             if re.search(exact_year_pattern, file_name_lower):
                 return (0, custom_key)
 
-            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി എവിടെയെങ്കിലും വർഷം വരുന്നത് (ഉദാ: beast race 2026)
-            match_year_pattern = r'^' + re.escape(query_lower) + r'\b.*?(\d{4})'
-            if re.search(match_year_pattern, file_name_lower):
-                return (1, custom_key)
-                
-            # കണ്ടീഷൻ 3: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത് (ഉദാ: beast s01)
+            # കണ്ടീഷൻ 2: ക്വറിയിൽ തുടങ്ങി സീസൺ/എപ്പിസോഡ് വരുന്നത്
             match_season_pattern = r'^' + re.escape(query_lower) + r'\b.*?(s\d+|e\d+)'
             if re.search(match_season_pattern, file_name_lower):
+                return (1, custom_key)
+
+            # കണ്ടീഷൻ 3: ക്വറിയിൽ തുടങ്ങി എവിടെയെങ്കിലും വർഷം വരുന്നത് (ഉദാ: dc films suicide squad 2016)
+            match_year_pattern = r'^' + re.escape(query_lower) + r'\b.*?(\d{4})'
+            if re.search(match_year_pattern, file_name_lower):
                 return (2, custom_key)
                 
-            # കണ്ടീഷൻ 4: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ 
+            # കണ്ടീഷൻ 4: യൂസർ ടൈപ്പ് ചെയ്ത വാക്ക് വെച്ച് തുടങ്ങുന്നവ
             if file_name_lower.startswith(query_lower):
                 return (3, custom_key)
                 
             # കണ്ടീഷൻ 5: ബാക്കിയുള്ളവ
             return (4, custom_key)
-
 
 
         # ഫയലുകൾ സോർട്ട് ചെയ്യുന്നു
