@@ -210,7 +210,7 @@ async def get_bad_files(query, file_type=None, filter=False):
 
 
 async def get_search_results(query, file_type=None, max_results=8, offset=0, filter=False):
-    """Smart Strict Match - Latest Years First (100% Group Retention)"""
+    """Smart Strict Match - Latest Movies First & Series in Pure Episode Order"""
 
     # 1. സെർച്ച് ക്വറി ക്ലീൻ ചെയ്യുന്നു
     query_no_apostrophe = query.replace("'", "")
@@ -247,8 +247,8 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
     cursor_media = Media.find(filter_dict)
     cursor_mediaa = Mediaa.find(filter_dict)
 
-    files_media = await cursor_media.to_list(length=60)
-    files_mediaa = await cursor_mediaa.to_list(length=60)
+    files_media = await cursor_media.to_list(length=200)
+    files_mediaa = await cursor_mediaa.to_list(length=200)
 
     interleaved_files = []
     index_media1 = index_media2 = 0
@@ -260,7 +260,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             interleaved_files.append(files_mediaa[index_media2])
             index_media2 += 1
 
-    # 4. സോർട്ടിങ് ലോജിക് (ലേറ്റസ്റ്റ് വർഷങ്ങൾക്ക് ഏറ്റവും ഉയർന്ന മുൻഗണന)
+    # 4. സോർട്ടിങ് ലോജിക് (സീരീസുകൾക്ക് വർഷം ഒഴിവാക്കി സീസൺ/എപ്പിസോഡ് ഓർഡർ മാത്രം)
     if interleaved_files:
         query_lower = query.lower().strip()
         
@@ -269,27 +269,33 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
             file_name_lower = re.sub(r'[\u200b\u200c\u200d\ufeff\u200e\u200f]', '', file_name_lower)
             file_name_lower = re.sub(r'[\s\u00a0\u2000-\u200a\u202f\u205f\u3000]+', ' ', file_name_lower)
             
-            # --- പ്രധാന മാറ്റം ഇവിടെയാണ് ---
-            # വർഷങ്ങളും നമ്പറുകളും നെഗറ്റീവ് ആക്കുന്നു (-2026, -2018). 
-            # ഇത് കാരണം സോർട്ട് ചെയ്യുമ്പോൾ വലിയ വർഷങ്ങൾ (2026) ഏറ്റവും മുകളിൽ വരും.
-            numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
-            num_key = tuple(-x for x in numbers)
+            # ഫയൽ നെയിമിൽ സീസണോ എപ്പിസോഡോ (s01, e01, s1) ഉണ്ടോ എന്ന് നോക്കുന്നു
+            is_series = bool(re.search(r'\b(s\d+|e\d+)\b', file_name_lower))
             
-            # കണ്ടീഷൻ 0: ക്വറി + വർഷം (ഉദാ: Alpha 2026, Alpha 2018) -> HIGHEST PRIORITY
-            year_pattern = r'^' + re.escape(query_lower) + r'\s*\d{4}\b'
-            if re.match(year_pattern, file_name_lower):
+            if is_series:
+                # --- സീരീസുകൾക്കുള്ള പ്രത്യേക ലോജിക് ---
+                # വർഷങ്ങൾ (4 ഡിജിറ്റ് നമ്പറുകൾ) സീരീസിന്റെ ഓർഡറിനെ ബാധിക്കാതിരിക്കാൻ ഫയൽ നെയിമിൽ നിന്നും താൽക്കാലികമായി മാറ്റുന്നു
+                clean_series_name = re.sub(r'\b\d{4}\b', '', file_name_lower)
+                # സീസൺ, എപ്പിസോഡ് നമ്പറുകൾ മാത്രം എടുക്കുന്നു (S01, S02, E01 ക്രമത്തിൽ വരാൻ സാധാരണ പോസിറ്റീവ് നമ്പറുകൾ)
+                numbers = [int(s) for s in re.findall(r'\d+', clean_series_name)]
+                num_key = tuple(numbers)
+            else:
+                # --- സിനിമകൾക്കുള്ള ലോജിക് ---
+                # സിനിമയാണെങ്കിൽ ലേറ്റസ്റ്റ് വർഷം ആദ്യം വരാൻ നമ്പറുകൾ നെഗറ്റീവ് ആക്കുന്നു
+                numbers = [int(s) for s in re.findall(r'\d+', file_name_lower)]
+                num_key = tuple(-x for x in numbers)
+            
+            # കണ്ടീഷൻ 0: ക്വറി + വർഷം അല്ലെങ്കിൽ ക്വറി + സീസൺ/എപ്പിസോഡ് (HIGHEST PRIORITY)
+            strict_pattern = r'^' + re.escape(query_lower) + r'\s*(\d{4}|s\d+|e\d+)\b'
+            if re.match(strict_pattern, file_name_lower):
                 return (0, num_key, file_name_lower)
-
-            # കണ്ടീഷൻ 1: ക്വറി + സീസൺ/എപ്പിസോഡ് (ഉദാ: Alpha S01)
-            season_pattern = r'^' + re.escape(query_lower) + r'\s*(s\d+|e\d+)\b'
-            if re.match(season_pattern, file_name_lower):
+                
+            # കണ്ടീഷൻ 1: വാക്ക് വെച്ച് തുടങ്ങുന്ന മറ്റ് ഫയലുകൾ (MEDIUM PRIORITY)
+            if file_name_lower.startswith(query_lower):
                 return (1, num_key, file_name_lower)
                 
-            # കണ്ടീഷൻ 2: വാക്ക് വെച്ച് തുടങ്ങുന്ന മറ്റ് ഫയലുകൾ (ഉദാ: Alpha Dog)
-            if file_name_lower.startswith(query_lower):
-                return (2, num_key, file_name_lower)
-                
-            return (3, num_key, file_name_lower)
+            # കണ്ടീഷൻ 2: ബാക്കിയുള്ള അനുബന്ധ ഫയലുകൾ (LOW PRIORITY)
+            return (2, num_key, file_name_lower)
 
         interleaved_files.sort(key=sort_by_exact_match)
 
@@ -313,6 +319,7 @@ async def get_search_results(query, file_type=None, max_results=8, offset=0, fil
         return files, next_offset, total_results
     else:
         return files, '', total_results
+
 
 
 
