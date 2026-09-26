@@ -76,8 +76,14 @@ LANGUAGES = [
 ]
 
 
-QUALITIES = ["🔹 360ᴘ", "🔷 480ᴘ", "✨ 720ᴘ", "🌟 1080ᴘ", "💎 1440ᴘ", "👑 2160ᴘ"]
-
+QUALITIES = [
+    ("🔹 360ᴘ", "360p"), 
+    ("🔷 480ᴘ", "480p"), 
+    ("✨ 720ᴘ", "720p"), 
+    ("🌟 1080ᴘ", "1080p"), 
+    ("💎 1440ᴘ", "1440p"), 
+    ("👑 2160ᴘ", "2160p")
+]
 
 # പ്രധാന ഫിൽട്ടർ മെനുവിന്റെ ഫോണ്ടും ഇമോജികളും
 def get_filter_menu_buttons(req_id, key):
@@ -396,7 +402,7 @@ async def next_page(bot, query):
 @Client.on_callback_query()
 async def cb_handler(client: Client, query: CallbackQuery):
     # =====================================================================
-    # ADVANCED INLINE MENUS HANDLERS (SIMPLE BUTTON BUG FIXED & FLOOD FIXED)
+    # ADVANCED INLINE MENUS HANDLERS WITH FUNCTIONAL SEARCH FILTERS
     # =====================================================================
     if query.data.startswith("flm_"):
         parts = query.data.split("_")
@@ -414,85 +420,36 @@ async def cb_handler(client: Client, query: CallbackQuery):
         # 1. QUALITY MENU
         if action == "qualmenu":
             buttons_list = []
-            for q in QUALITIES:
-                buttons_list.append(InlineKeyboardButton(q, callback_data=f"flm_filter_{req_user}_{key}_{q.split()[-1].lower()}"))
+            for name, code in QUALITIES:
+                buttons_list.append(InlineKeyboardButton(name, callback_data=f"flm_filter_{req_user}_{key}_{code}"))
             grid = chunk_list(buttons_list, 2)
             grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             try:
                 await query.message.edit_text("ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ qᴜᴀʟɪᴛʏ", reply_markup=InlineKeyboardMarkup(grid))
             except FloodWait as e:
-                # ടെലിഗ്രാം റേറ്റ് ലിമിറ്റ് കൺട്രോൾ ചെയ്യാൻ അലേർട്ട് കാണിക്കുന്നു
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
             return await query.answer()
             
-        # 2. LANGUAGES MENU
+        # 2. LANGUAGES MENU (3 ബട്ടണുകൾ വീതമുള്ള സ്റ്റൈലിഷ് ഗ്രിഡ്)
         elif action == "langmenu":
             buttons_list = []
             for name, code in LANGUAGES:
                 buttons_list.append(InlineKeyboardButton(name, callback_data=f"flm_filter_{req_user}_{key}_{code}"))
-            grid = chunk_list(buttons_list, 2)
-            grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
+            grid = chunk_list(buttons_list, 3)
+            grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍе", callback_data=f"flm_home_{req_user}_{key}")])
             try:
-                await query.message.edit_text("ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ʟᴀɴɢᴜᴀɢеs", reply_markup=InlineKeyboardMarkup(grid))
+                await query.message.edit_text(" can_Urvashi Theaters™️\n\nꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ʟᴀɴɢᴜᴀɢеs 👇", reply_markup=InlineKeyboardMarkup(grid))
             except FloodWait as e:
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
             return await query.answer()
 
-        # 3. YEARS MENU (BUG FIXED - 1990 to 2026 WITH NORMAL INTEGERS)
-        elif action == "yearmenu":
-            buttons_list = []
-            for year in range(1990, 2027):
-                buttons_list.append(InlineKeyboardButton(f"{year}", callback_data=f"flm_filter_{req_user}_{key}_{year}"))
-            grid = chunk_list(buttons_list, 4)
-            grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
-            try:
-                await query.message.edit_text("ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ʏᴇᴀʀ", reply_markup=InlineKeyboardMarkup(grid))
-            except FloodWait as e:
-                await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
-                return
-            except Exception: pass
-            return await query.answer()
-            
-        # 4. EPISODES MENU (BUG FIXED - E01 to E40 WITH NORMAL INTEGERS & FLOOD FIXED)
-        elif action == "epmenu":
-            buttons_list = []
-            for ep in range(1, 41):
-                ep_str = f"E{ep:02d}"
-                buttons_list.append(InlineKeyboardButton(ep_str, callback_data=f"flm_filter_{req_user}_{key}_e{ep:02d}"))
-            grid = chunk_list(buttons_list, 4)
-            grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
-            try:
-                await query.message.edit_text("ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ᴇᴘɪꜱᴏᴅᴇ", reply_markup=InlineKeyboardMarkup(grid))
-            except FloodWait as e:
-                await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
-                return
-            except Exception: pass
-            return await query.answer()
-
-        # 5. SEASONS MENU (BUG FIXED - SEASON 1 to 10 WITH NORMAL INTEGERS & FLOOD FIXED)
-        elif action == "seasonmenu":
-            buttons_list = []
-            for s in range(1, 11):
-                buttons_list.append(InlineKeyboardButton(f"SEASON {s}", callback_data=f"flm_filter_{req_user}_{key}_s{s:02d}"))
-            grid = chunk_list(buttons_list, 2)
-            grid.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
-            try:
-                await query.message.edit_text("ꜱᴇʟᴇᴄᴛ ʏᴏᴜʀ ꜱᴇᴀꜱᴏɴ", reply_markup=InlineKeyboardMarkup(grid))
-            except FloodWait as e:
-                await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
-                return
-            except Exception: pass
-            return await query.answer()
-
-        # 6. HOME BUTTON (NoneType CHAT ID BUG FIXED)
+        # 6. HOME BUTTON
         elif action == "home":
             files, offset, total_results = await get_search_results(search_query.lower(), offset=0, filter=True)
-            
-            # ⬇️ ഇവിടെയാണ് സുരക്ഷിതമായ ചെക്കിംഗ് ആഡ് ചെയ്തത് ⬇️
             chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
             settings = await get_settings(chat_id)
             
@@ -505,7 +462,9 @@ async def cb_handler(client: Client, query: CallbackQuery):
                     InlineKeyboardButton(text=f"   𝟷 / {math.ceil(int(total_results) / 10)}", callback_data="pages"),
                     InlineKeyboardButton(text="ɴᴇxᴛ", callback_data=f"next_{req_user}_{key}_10")
                 ])
-            cap = f"<b><i>Here is What I Found In My Database For Your Query :{search_query}</i></b>"
+            cap = f"<b><i>Found Results For Your Query {search_query}</i></b>\n\n<b><i><u>For better result:</u></i></b>\n<i>↪bhramam      ❌\n↪bhramam 2021 ✅</i>"
+            mins = int(AUTO_DELETE_TIME / 60)
+            cap += f"\n\n⏳ <i>This search result will be auto deleted in {mins} mins to avoid group clutter.</i>"
             try:
                 await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
             except FloodWait as e:
@@ -514,65 +473,41 @@ async def cb_handler(client: Client, query: CallbackQuery):
             except Exception: pass
             return await query.answer()
 
-        # 7. FILTER SUB-BUTTON CLICKED (NoneType CHAT ID & LIST MATCH BUG FIXED)
+        # 7. FILTER SUB-BUTTON CLICKED (യഥാർത്ഥ ഡാറ്റാബേസ് ഫിൽട്ടറിംഗ് ലോജിക്)
         elif action == "filter":
-            # parts-ൽ നിന്നും ഫിൽട്ടർ ടാഗ് കൃത്യമായി വേർതിരിച്ചെടുക്കുന്നു
             filter_tag = parts[4].lower() if len(parts) > 4 else ""
-            files = []
-            total_results = 0
-            
             if not filter_tag:
                 return await query.answer("❌ തെറ്റായ ഫിൽട്ടർ ടാഗ്!", show_alert=True)
             
-            if re.match(r'^e\d{2}$', filter_tag):
-                ep_num = int(filter_tag[1:])
-                search_variants = [
-                    f"{search_query} {filter_tag}",
-                    f"{search_query} episode {ep_num}",
-                    f"{search_query} episode {ep_num:02d}",
-                    f"{search_query} ep{ep_num}",
-                    f"{search_query} ep{ep_num:02d}"
-                ]
-                for variant in search_variants:
-                    res_files, _, res_total = await get_search_results(variant.lower(), offset=0, filter=True)
-                    if res_files:
-                        files.extend(res_files)
-                        total_results += res_total
-                        
-            elif re.match(r'^s\d{2}$', filter_tag):
-                s_num = int(filter_tag[1:])
-                search_variants = [
-                    f"{search_query} {filter_tag}",
-                    f"{search_query} season {s_num}",
-                    f"{search_query} season {s_num:02d}"
-                ]
-                for variant in search_variants:
-                    res_files, _, res_total = await get_search_results(variant.lower(), offset=0, filter=True)
-                    if res_files:
-                        files.extend(res_files)
-                        total_results += res_total
+            lang_variants = {
+                "malayalam": ["malayalam", "mal"],
+                "tamil": ["tamil", "tam"],
+                "english": ["english", "eng"],
+                "hindi": ["hindi", "hin"],
+                "telugu": ["telugu", "tel"],
+                "kannada": ["kannada", "kan"],
+                "punjabi": ["punjabi", "panjabi"],
+                "bengali": ["bengali", "bangla"],
+                "marathi": ["marathi"],
+                "bhojpuri": ["bhojpuri"],
+                "dual": ["dual", "audio"],
+                "multi": ["multi", "audio"]
+            }
             
-            else:
-                lang_variants = {
-                    "malayalam": ["malayalam", "mal"],
-                    "tamil": ["tamil", "tam"],
-                    "english": ["english", "eng"],
-                    "hindi": ["hindi", "hin"],
-                    "telugu": ["telugu", "tel"],
-                    "kannada": ["kannada", "kan"]
-                }
-                
-                if filter_tag in lang_variants:
-                    for variant in lang_variants[filter_tag]:
-                        res_files, _, res_total = await get_search_results(f"{search_query} {variant}".lower(), offset=0, filter=True)
-                        if res_files:
-                            files.extend(res_files)
-                            total_results += res_total
-                else:
-                    res_files, _, res_total = await get_search_results(f"{search_query} {filter_tag}".lower(), offset=0, filter=True)
+            files = []
+            total_results = 0
+            
+            if filter_tag in lang_variants:
+                for variant in lang_variants[filter_tag]:
+                    res_files, _, res_total = await get_search_results(f"{search_query} {variant}".lower(), offset=0, filter=True)
                     if res_files:
                         files.extend(res_files)
                         total_results += res_total
+            else:
+                res_files, _, res_total = await get_search_results(f"{search_query} {filter_tag}".lower(), offset=0, filter=True)
+                if res_files:
+                    files.extend(res_files)
+                    total_results += res_total
 
             seen_ids = set()
             unique_files = []
@@ -585,29 +520,24 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 return await query.answer(f"❌ {filter_tag.upper()} ഫയലുകൾ ഒന്നും കണ്ടെത്താനായില്ല!", show_alert=True)
                 
             chat_id = query.message.chat.id if (query.message and query.message.chat) else query.from_user.id
-                
             settings = await get_settings(chat_id)
             pre = 'filep' if settings['file_secure'] else 'file'
             
             btn = get_filter_menu_buttons(req_user, key)
             for file in unique_files[:10]:
                 btn.append([InlineKeyboardButton(text=f"{get_size(file.file_size)}➪{file.file_name}", callback_data=f'{pre}#{file.file_id}')])
-            btn.append([InlineKeyboardButton("ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ", callback_data=f"flm_home_{req_user}_{key}")])
             
-            cap = f"<b><i>Filtered Results for: {search_query} {filter_tag.upper()}</i></b>"
+            btn.append([InlineKeyboardButton("↭ ʙᴀᴄᴋ ᴛᴏ ʜᴏᴍᴇ ↭", callback_data=f"flm_home_{req_user}_{key}")])
+            
+            cap = f"<b><i>Filtered Results for: {search_query} [{filter_tag.upper()}]</i></b>"
             try:
                 await query.message.edit_text(text=cap, reply_markup=InlineKeyboardMarkup(btn))
             except FloodWait as e:
                 await query.answer(f"വേഗത കൂടുതലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
                 return
             except Exception: pass
-            return await query.answer()
+            return await query.answer(f"✅ {filter_tag.upper()} results loaded!")
 
-            
-        # 8. SEND ALL BUTTON CLICKED (DUMMY VERSION)
-        elif action == "sendall":
-            await query.answer("⏳ ᴄᴏᴍɪɴɢ sᴏᴏɴ...", show_alert=True)
-            return
     if query.data == "close_data":
         await query.message.delete()
     elif query.data == "delallconfirm":
