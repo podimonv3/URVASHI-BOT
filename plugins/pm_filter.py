@@ -15,7 +15,7 @@ from info import ADMINS, REQ_CHANNEL1, REQ_CHANNEL2, AUTH_USERS, CUSTOM_FILE_CAP
     SINGLE_BUTTON, SPELL_CHECK_REPLY, LOG_CHANNEL
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram import Client, filters, enums
-from utils import get_size, is_subscribed, temp, get_settings, save_group_settings, is_requested_one, is_requested_two
+from utils import get_size, is_subscribed, temp, get_settings, save_group_settings, is_requested_one, is_requested_two, get_any_movie_poster
 from database.users_chats_db import db
 from database.ia_filterdb import Media, Mediaa, get_bad_files, get_file_details, get_search_results, db as clientDB, db1 as clientDB2, db2 as clientDB3
 from database.filters_mdb import (
@@ -1054,20 +1054,40 @@ async def auto_filter(client, msg, spoll=False):
             [InlineKeyboardButton(text=f"1/{math.ceil(int(total_results) / 10)}", callback_data="pages"),
             InlineKeyboardButton(text="Nᴇxᴛ", callback_data=f"next_{req}_{key}_{offset}")]
         )     
-    cap = f"<b><i>Found Results For Your Query {search}</i></b>\n\n<b><i><u>For better result:</u></i></b>\n<i>↪bhramam      ❌\n↪bhramam 2021 ✅</i>"
-    
-    # ⏱️ സെർച്ച് റിസൾട്ടിനൊപ്പം ഡിലീറ്റ് വാർണിംഗ് ടെക്സ്റ്റ് കൂടി ചേർക്കുന്നു
-    mins = int(AUTO_DELETE_TIME / 60)
-    cap += f"\n\n⏳ <i>This search result will be auto deleted in {mins} mins to avoid group clutter.</i>"
-    
-    try:
-        fmsg = await message.reply_text(cap, reply_markup=InlineKeyboardMarkup(btn))
-        # 🗑️ ബാക്ക്ഗ്രൗണ്ട് ടാസ്ക് വഴി സെർച്ച് റിസൾട്ട് മെസ്സേജ് ഡിലീറ്റ് ചെയ്യുന്നു
-        asyncio.create_task(auto_delete_messages(client, message.chat.id, [fmsg.id], AUTO_DELETE_TIME))
-    except Exception as e:
-        logger.error(f"Error in auto_filter auto-delete: {e}")
-           
+    poster = await get_any_movie_poster(search)
 
+    cap = (
+        f"<b><i>Found Results For Your Query {search}</i></b>\n\n"
+        f"<b><i><u>For better result:</u></i></b>\n"
+        f"<i>↪bhramam      ❌\n"
+        f"↪bhramam 2021 ✅</i>"
+    )
+
+    mins = int(AUTO_DELETE_TIME / 60)
+
+    cap += (
+        f"\n\n⏳ <i>This search result will be auto deleted "
+        f"in {mins} mins to avoid group clutter.</i>"
+    )
+
+    try:
+        fmsg = await message.reply_photo(
+            photo=poster,
+            caption=cap,
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+
+        asyncio.create_task(
+            auto_delete_messages(
+                client,
+                message.chat.id,
+                [fmsg.id],
+                AUTO_DELETE_TIME
+            )
+        )
+
+    except Exception as e:
+        logger.error(f"Error in auto_filter poster/auto-delete: {e}")
 
 
 async def global_filters(client, message, text=False):
