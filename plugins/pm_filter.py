@@ -100,7 +100,7 @@ def chunk_list(lst, n):
 
 
 # ⏱️ പ്രധാന ഫയലിൽ നൽകിയ അതേ സമയം ഇവിടെയും നൽകുക
-AUTO_DELETE_TIME = 180
+AUTO_DELETE_TIME = 600
 
 # 📝 Short Warning Message Template in Blockquote
 AUTO_DEL_TEXT = (
