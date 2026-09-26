@@ -11,6 +11,7 @@ import time
 from datetime import datetime
 from typing import List
 from database.users_chats_db import db
+from info import TMDB_API_KEY, OMDB_API_KEY, DEFAULT_POSTER
 import requests
 import asyncio
 
@@ -37,6 +38,185 @@ class temp(object):
     U_NAME = None
     B_NAME = None
     SETTINGS = {}
+
+
+
+
+import asyncio
+import re
+import urllib.parse
+
+import aiohttp
+from bs4 import BeautifulSoup
+from imdb import Cinemagoer
+
+ia = Cinemagoer()
+
+# 1. TMDB Async
+async def get_tmdb_poster(movie_name, tmdb_api_key):
+    try:
+        url = (
+            f"https://api.themoviedb.org/3/search/movie"
+            f"?api_key={tmdb_api_key}"
+            f"&query={urllib.parse.quote(movie_name)}"
+        )
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as response:
+                data = await response.json()
+
+                if data.get("results"):
+                    movie = data["results"][0]
+
+                    if movie.get("poster_path"):
+                        return (
+                            f"https://image.tmdb.org/t/p/w500"
+                            f"{movie['poster_path']}"
+                        )
+
+    except Exception:
+        pass
+
+    return None
+
+
+
+# 2. OMDb Async
+async def get_omdb_poster(movie_name, omdb_api_key):
+    try:
+        url = (
+            f"https://www.omdbapi.com/"
+            f"?apikey={omdb_api_key}"
+            f"&t={urllib.parse.quote(movie_name)}"
+        )
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as response:
+                data = await response.json()
+
+                if (
+                    data.get("Response") == "True"
+                    and data.get("Poster")
+                    and data["Poster"] != "N/A"
+                ):
+                    return data["Poster"]
+
+    except Exception:
+        pass
+
+    return None
+
+# 3. Cinemagoer (ഇത് async അല്ല, അതിനാൽ ഇതിനെ ഒരു പ്രത്യേക ത്രെഡിൽ റൺ ചെയ്യിക്കണം)
+def sync_cinemagoer(movie_name):
+    try:
+        movies = ia.search_movie(movie_name)
+
+        if not movies:
+            return None
+
+        movie = movies[0]
+
+        # Fetch main movie information
+        ia.update(movie, ["main"])
+
+        # Prefer full-size poster
+        poster_url = movie.get("full-size cover url")
+
+        if poster_url:
+            return poster_url
+
+        # Fallback to normal poster
+        poster_url = movie.get("cover url")
+
+        if poster_url:
+            return poster_url
+
+    except Exception as e:
+        print(f"Cinemagoer error for '{movie_name}': {e}")
+
+    return None
+
+async def get_cinemagoer_poster(movie_name):
+    return await asyncio.to_thread(
+        sync_cinemagoer,
+        movie_name
+    )
+    
+# 4. Bing Scrapper Async
+async def scrape_bing_poster(movie_name):
+    try:
+        search_query = f"{movie_name} movie poster"
+        url = (
+            f"https://www.bing.com/images/search"
+            f"?q={urllib.parse.quote(search_query)}"
+        )
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/154.0.0.0 Safari/537.36"
+            )
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url,
+                headers=headers,
+                timeout=5
+            ) as response:
+
+                if response.status != 200:
+                    return None
+
+                html = await response.text()
+
+        soup = BeautifulSoup(html, "html.parser")
+        image_tag = soup.find("a", class_="iusc")
+
+        if image_tag and image_tag.get("m"):
+            match = re.search(
+                r'"murl":"(.*?)"',
+                image_tag["m"]
+            )
+
+            if match:
+                return match.group(1)
+
+    except Exception:
+        pass
+
+    return None
+
+
+async def get_any_movie_poster(movie_name):
+    # 1. TMDB
+    if TMDB_API_KEY:
+        poster = await get_tmdb_poster(movie_name, TMDB_API_KEY)
+        if poster:
+            return poster
+
+    # 2. OMDb
+    if OMDB_API_KEY:
+        poster = await get_omdb_poster(movie_name, OMDB_API_KEY)
+        if poster:
+            return poster
+
+    # 3. Cinemagoer
+    poster = await get_cinemagoer_poster(movie_name)
+    if poster:
+        return poster
+
+    # 4. Bing
+    poster = await scrape_bing_poster(movie_name)
+    if poster:
+        return poster
+
+    # 5. Default poster
+    return DEFAULT_POSTER
+
+
+
 
 async def check_loop_sub(client, message):
     count = 0
