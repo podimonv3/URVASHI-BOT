@@ -6,6 +6,7 @@ import math
 import ast  # eval-ന് പകരം സുരക്ഷിതമായി സ്ട്രിങ് ലിസ്റ്റ് ആക്കാൻ
 import emoji  # ഇമോജികൾ നീക്കം ചെയ്യാൻ
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
+from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, QueryIdInvalid, MessageIdInvalid
 from Script import script
 import pyrogram
 from database.connections_mdb import active_connection, all_connections, delete_connection, if_active, make_active, \
@@ -14,7 +15,6 @@ from info import ADMINS, REQ_CHANNEL1, REQ_CHANNEL2, AUTH_USERS, CUSTOM_FILE_CAP
     SINGLE_BUTTON, SPELL_CHECK_REPLY, LOG_CHANNEL
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram import Client, filters, enums
-from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid, QueryIdInvalid
 from utils import get_size, is_subscribed, temp, get_settings, save_group_settings, is_requested_one, is_requested_two
 from database.users_chats_db import db
 from database.ia_filterdb import Media, Mediaa, get_bad_files, get_file_details, get_search_results, db as clientDB, db1 as clientDB2, db2 as clientDB3
@@ -40,6 +40,24 @@ async def _patched_answer(self, *args, **kwargs):
         pass
 CallbackQuery.answer = _patched_answer
 # --- 🛠️ TELEGRAM ERROR FIXES END 🛠️ ---
+
+
+# --- 🛠️ MESSAGE ID INVALID GLOBAL FIX START 🛠️ ---
+
+_original_edit_markup = CallbackQuery.edit_message_reply_markup
+async def _patched_edit_markup(self, *args, **kwargs):
+    try:
+        return await _original_edit_markup(self, *args, **kwargs)
+    except MessageIdInvalid:
+        try:
+            # മെസ്സേജ് ഡിലീറ്റ് ആയാൽ യൂസർക്ക് പോപ്പ്-അപ്പ് കാണിക്കുന്നു
+            return await self.answer("ഈ മെനുവിന്റെ സമയം കഴിഞ്ഞു അല്ലെങ്കിൽ മെസ്സേജ് ഡിലീറ്റ് ആയി!", show_alert=True)
+        except Exception:
+            pass
+
+CallbackQuery.edit_message_reply_markup = _patched_edit_markup
+# --- 🛠️ MESSAGE ID INVALID GLOBAL FIX END 🛠️ ---
+
 
 # --- 🛠️ ADVANCED MENUS CONFIGURATION (STYLISH FONTS) 🛠️ ---
 LANGUAGES = [
@@ -364,13 +382,15 @@ async def next_page(bot, query):
         
     try:
         await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(btn))
+        await query.answer()
     except MessageNotModified:
-        pass
+        await query.answer()
+    except MessageIdInvalid:
+        # മെസ്സേജ് ഡിലീറ്റ് ആയിട്ടുണ്ടെങ്കിൽ യൂസർക്ക് ഒരു അലേർട്ട് കാണിക്കുന്നു
+        await query.answer("ഈ സെർച്ച് മെനു കാലാവധി കഴിഞ്ഞതSubയോ ഡിലീറ്റ് ചെയ്യപ്പെട്ടതോ ആണ്. ദയവായി വീണ്ടും സെർച്ച് ചെയ്യുക!", show_alert=True)
     except FloodWait as e:
         await query.answer(f"വളരെ വേഗത്തിലാണ്! ദയവായി {e.value} സെക്കൻഡ് കാത്തിരിക്കൂ.", show_alert=True)
-        return
-        
-    await query.answer()
+
 
 
 @Client.on_callback_query()
