@@ -14,6 +14,15 @@ def is_enabled(value, default):
     else:
         return default
 
+
+import os
+
+# നിലവിലുള്ള മറ്റ് വേരിയബിളുകൾക്ക് താഴെ ഇത് ചേർക്കുക:
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "5f28978232d6d780d64dd0d0e0bbe2f2")
+OMDB_API_KEY = os.environ.get("OMDB_API_KEY", "3feaa2f6")
+DEFAULT_POSTER = os.environ.get("DEFAULT_POSTER", "https://files.catbox.moe/yt159d.jpg")
+
+
 # Bot information
 SESSION = environ.get('SESSION', 'autodelete')
 API_ID = int(environ.get("API_ID", "19071424"))
